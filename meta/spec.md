@@ -164,7 +164,10 @@ Adapters are built in; split into packages only if a third party wants one.
 ## Claude Code hook (D2, D11, D19)
 
 - `motus-cc-hook` bin: one `PreToolUse` command hook that reads the shared config and denies matching `Read` paths and `Bash` commands, using the same blocklist core as pi.
-- It does no redaction until #54196 is fixed. Revisit then.
+- Wire it with matcher `Read|Bash` and command `motus-cc-hook` in `~/.claude/settings.json`.
+- Fail-closed: invalid config, bad input or a load error denies (JSON deny, or exit 2 from the shim). Exit 1 would let the tool run.
+- The bin is a plain-JS shim that loads `src/cc-hook.ts` through `jiti`: Node refuses to strip types under `node_modules`.
+- No redaction: #54196 was closed `NOT_PLANNED` on 2026-06-01, unfixed. Revisit if CC honors `updatedToolOutput` for Bash.
 
 ## Resolved questions
 

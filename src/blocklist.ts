@@ -75,6 +75,7 @@ function* listSimpleCommands(source: string): Generator<string[]> {
 
 function skipPrefixes(words: string[]): string[] {
   let index = 0
+  let lastWrapper: number | undefined
   while (index < words.length) {
     const word = words[index] ?? ''
     if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
@@ -83,11 +84,13 @@ function skipPrefixes(words: string[]): string[] {
     }
     const wrapper = basename(word)
     if (!WRAPPERS.has(wrapper)) break
+    lastWrapper = index
     const argFlags = WRAPPER_ARG_FLAGS.get(wrapper)
     for (index++; words[index]?.startsWith('-'); index++)
       if (argFlags?.has(words[index] ?? '')) index++
   }
-  return words.slice(index)
+  const isWrapperTheCommand = index >= words.length && lastWrapper !== undefined
+  return words.slice(isWrapperTheCommand ? lastWrapper : index)
 }
 
 function splitCommands(source: string): string[][] {

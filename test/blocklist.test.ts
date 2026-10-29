@@ -65,6 +65,16 @@ describe('checkCommand', () => {
   test('reason names the entry', () => {
     assert.match(checkCommand('gh auth token', COMMANDS) ?? '', /"gh auth token"/)
   })
+
+  for (const command of ['env', 'env FOO=1', 'env -u X', 'sudo env', 'true && env | sort']) {
+    test(`blocks wrapper run as the command: ${command}`, () => {
+      assert.ok(checkCommand(command, ['env']))
+    })
+  }
+
+  test('allows env as a wrapper of an unblocked command', () => {
+    assert.equal(checkCommand('env FOO=1 ls', ['env']), undefined)
+  })
 })
 
 describe('paths', () => {

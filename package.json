@@ -22,7 +22,11 @@
     "url": "git+https://github.com/espadat-studio/motus.git"
   },
   "type": "module",
+  "bin": {
+    "motus-cc-hook": "bin/motus-cc-hook.js"
+  },
   "files": [
+    "bin",
     "extensions",
     "src"
   ],
@@ -39,5 +43,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.19.0"
+  },
+  "dependencies": {
+    "jiti": "^2.7.0"
   }
 }
