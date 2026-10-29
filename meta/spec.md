@@ -178,5 +178,5 @@ blockCommands = ["env", "printenv", "mise env", "cat .env*"]
 
 1. `pa` and 1Password: D20.
 2. Implementation: TypeScript source loaded by pi through jiti, no build step; `node --test` with native type stripping (same as `pi-memsearch`).
-3. Package: `@espadat-studio/motus` (repo `motus`; no `pi-` prefix since it serves pi and CC; `motus` is taken on npm). CC hook ships in it (D11).
+3. Package: `@espadat/motus` (repo `motus`; no `pi-` prefix since it serves pi and CC; `motus` is taken on npm). CC hook ships in it (D11).
 4. Scrubbing old sessions with `geheim`: out of scope (leak audit 2026-10-29 found 0 of 68 values in stored sessions).

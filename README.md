@@ -11,7 +11,7 @@ Status: **pi extension wired**, not yet smoke-tested. Claude Code hook and the `
 Install globally and load motus before every other extension:
 
 ```sh
-pi install npm:@espadat-studio/motus
+pi install npm:@espadat/motus
 ```
 
 - Global, never `--local`: subagent pi processes only load global extensions.

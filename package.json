@@ -1,5 +1,5 @@
 {
-  "name": "@espadat-studio/motus",
+  "name": "@espadat/motus",
   "version": "0.0.0",
   "description": "Keep secrets out of the model and pi's session files: exact-value redaction from pluggable secret sources, credential path and command blocks, fail-closed.",
   "keywords": [
