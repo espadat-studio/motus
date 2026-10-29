@@ -11,7 +11,12 @@ export default defineConfig({
       description:
         "Keep secrets out of the model and pi's session files: exact-value redaction from pluggable secret sources, credential path and command blocks, fail-closed.",
       logo: { src: './src/assets/mark.svg', alt: 'Espadat' },
-      head: [{ tag: 'link', attrs: { rel: 'icon', href: '/favicon.ico', sizes: '16x16 32x32' } }],
+      head: [
+        {
+          tag: 'link',
+          attrs: { rel: 'icon', href: '/favicon.ico', sizes: '16x16 32x32' },
+        },
+      ],
       customCss: ['@espadat/docs-theme/styles/theme.css'],
       components: {
         Footer: '@espadat/docs-theme/components/footer.astro',
