@@ -82,6 +82,7 @@ Verified in pi 1.4.0 source: `tool_result` changes reach the `toolResult` messag
 ### Blocking
 
 - Commands: the word at command position at the start and after `|`, `;`, `&&`, `||`, `$(`, backtick, `(`. Skip wrappers `env VAR=x`, `sudo`, `command`, `exec`, `time`, `nohup`, `xargs`. Recurse into `bash|sh|zsh -c '…'` and `eval`. Hand-rolled tokenizer, no dependency.
+- Heredocs: a quoted-delimiter body is literal; an unquoted body is scanned for `$(…)` and backticks. Every body is scanned as a script when the command anywhere runs `bash|sh|zsh`, `eval`, `source` or `.`. An unterminated body blocks.
 - Not covered: scripts, aliases, shell functions.
 - Paths: config entries are expanded (`~`, `$HOME`, env vars, `${VAR:-fallback}`) and resolved with `realpath` at load. A directory entry blocks everything beneath it. An unset variable without a fallback is invalid config (D5), never a skipped entry.
   - Path-taking tools (`read`, `grep`, `find`, `ls`, `edit`, `write`, MCP filesystem tools): resolve the argument against `ctx.cwd`, then compare.
