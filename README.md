@@ -4,7 +4,29 @@
 
 Stops secrets reaching the model, or pi's session files, during AI coding sessions. A pi extension, plus a Claude Code `PreToolUse` hook that only blocks.
 
-Status: **design only**. No code yet.
+Status: **pi extension wired**, not yet smoke-tested. Claude Code hook and the `mise` source are still to come.
+
+## Install (pi)
+
+Install globally and load motus before every other extension:
+
+```sh
+pi install npm:@espadat-studio/motus
+```
+
+- Global, never `--local`: subagent pi processes only load global extensions.
+- First in `packages` of `~/.pi/agent/settings.json`: handlers run in load order, so an extension loaded earlier sees raw tool output and messages.
+- pi can't report handler order, so motus doesn't check either rule.
+
+Create `~/.config/motus/config.json` (see [`meta/spec.md`](meta/spec.md#config-configmotusconfigjson)). Without it every session starts degraded.
+
+## Use
+
+- Session start reports how many secrets loaded and from which sources, never values.
+- Degraded session: a required source failed where it applies, so every tool not in `degradedAllowTools` is blocked, `!` commands included.
+- `/motus status`: loaded counts, failures and state.
+- `/motus continue`: accept partial protection for this session. Blocks still apply.
+- There is no `/motus off`. Read secret values in your own terminal.
 
 ## Docs
 

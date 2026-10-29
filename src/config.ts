@@ -28,6 +28,7 @@ export const DEFAULT_CONFIG_PATH = join(homedir(), '.config', 'motus', 'config.j
 export const DEFAULT_PREFIXES = ['sk-ant-', 'ghp_', 'github_pat_', 'AKIA', 'xox[bp]-']
 
 export const DEFAULT_TIMEOUT_MS = 10_000
+export const DEFAULT_MIN_VALUE_LENGTH = 8
 const TOP_LEVEL_KEYS = [
   'sources',
   'prefixes',
@@ -80,7 +81,7 @@ export function parseConfig(raw: unknown, env: NodeJS.ProcessEnv = process.env):
     blockPaths: asStrings(config['blockPaths'] ?? [], 'blockPaths'),
     blockCommands: asStrings(config['blockCommands'] ?? [], 'blockCommands'),
     degradedAllowTools: asStrings(config['degradedAllowTools'] ?? [], 'degradedAllowTools'),
-    minValueLength: asPositiveInteger(config['minValueLength'] ?? 8, 'minValueLength'),
+    minValueLength: asPositiveInteger(config['minValueLength'] ?? DEFAULT_MIN_VALUE_LENGTH, 'minValueLength'),
     claudeCode: { blockCommands: asStrings(claudeCode['blockCommands'] ?? [], 'claudeCode.blockCommands') },
   }
 }
