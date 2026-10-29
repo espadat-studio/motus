@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import type { SecretSource } from './sources.ts'
 import { commandSource } from './sources/command.ts'
 import { envSource } from './sources/env.ts'
+import { miseSource } from './sources/mise.ts'
 
 export interface ConfiguredSource {
   source: SecretSource
@@ -49,6 +50,13 @@ const ADAPTERS: Record<
     create: (id, { command }, at) => {
       if (typeof command !== 'string' || command === '') throw new Error(`${at}.command must be a non-empty string`)
       return commandSource(id, command)
+    },
+  },
+  mise: {
+    keys: ['listFile'],
+    create: (id, { listFile }, at, env) => {
+      if (typeof listFile !== 'string' || listFile === '') throw new Error(`${at}.listFile must be a non-empty string`)
+      return miseSource(id, listFile, env)
     },
   },
 }

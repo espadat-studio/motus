@@ -4,11 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 
-import { describeLoad, loadFromConfig, loadSources, type SecretSource } from '../src/sources.ts'
+import { describeLoad, loadFromConfig, loadSources, PartialLoadError, type SecretSource } from '../src/sources.ts'
 import { commandSource } from '../src/sources/command.ts'
 import { envSource } from '../src/sources/env.ts'
 
-const ctx = { cwd: tmpdir(), signal: new AbortController().signal }
+const ctx = { cwd: tmpdir(), signal: new AbortController().signal, warn: () => {} }
 
 function fakeSource(id: string, load: SecretSource['load'], applies = true): SecretSource {
   return { id, appliesTo: async () => applies, load }
@@ -96,7 +96,29 @@ describe('loadSources', () => {
       secrets: [secret],
       loaded: [{ id: 'ok', count: 1 }, { id: 'empty', count: 0 }],
       failures: [],
+      warnings: [],
     })
+  })
+
+  test('keeps the secrets of a partial failure and reports it', async () => {
+    const partial = fakeSource('mise', async () => {
+      throw new PartialLoadError('a.toml failed: exited with code 1', [secret])
+    })
+    const result = await loadSources([{ source: partial, required: true, timeoutMs: 1000 }], tmpdir())
+    assert.deepEqual(result.secrets, [secret])
+    assert.deepEqual(result.loaded, [{ id: 'mise', count: 1 }])
+    assert.deepEqual(result.failures, [
+      { id: 'mise', required: true, applies: true, reason: 'a.toml failed: exited with code 1' },
+    ])
+  })
+
+  test('collects warnings tagged with the source id', async () => {
+    const warns = fakeSource('mise', async ({ warn }) => {
+      warn('b.toml failed: exited with code 1')
+      return [secret]
+    })
+    const result = await loadSources([{ source: warns, required: true, timeoutMs: 1000 }], tmpdir())
+    assert.deepEqual(result.warnings, ['mise warning: b.toml failed: exited with code 1'])
   })
 
   test('reports failures with required and applies', async () => {
@@ -185,6 +207,7 @@ describe('describeLoad', () => {
         { id: 'vault', required: true, applies: false, reason: 'exited with code 1' },
         { id: 'extra', required: false, applies: true, reason: 'exited with code 2' },
       ],
+      warnings: ['mise warning: b.toml failed: exited with code 1'],
     })
     assert.equal(
       text,
@@ -193,6 +216,7 @@ describe('describeLoad', () => {
         'mise failed: timed out after 10000 ms (required, applies here)',
         'vault failed: exited with code 1 (required, not used here)',
         'extra failed: exited with code 2 (optional)',
+        'mise warning: b.toml failed: exited with code 1',
       ]
         .join('\n'),
     )
