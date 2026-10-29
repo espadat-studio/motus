@@ -2,17 +2,19 @@
 
 Each step is one atomic commit. Git user: `sripwoud`. Don't push until told.
 
-| # | Step                                                                                                                                      | Status                   |
-| - | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| 1 | Local hardening (see `personal/hardening.md`)                                                                                             | in progress: 2 of 5 done |
-| 2 | Resolve the spec's open questions; scaffold the repo (git init, TS, test runner, MIT `CREDITS.md` for pi-secret-safe, pi-redact, pi-fnox) | done                     |
-| 3 | Core, test-first: matcher (exact + derived forms + prefixes), path/command blocklist, adapter contract, config validation                 | todo                     |
-| 4 | Adapters: `env`, `command`, `mise`                                                                                                        | todo                     |
-| 5 | pi extension: wire the events from `spec.md`; degraded state; `/motus status`, `/motus continue`                                          | todo                     |
-| 6 | Shared config in chezmoi (`~/.config/motus/config.toml`)                                                                                  | todo                     |
-| 7 | Claude Code `PreToolUse` block hook; check whether #54196 is still open                                                                   | todo                     |
-| 8 | Smoke test in pi (below)                                                                                                                  | todo                     |
-| 9 | Roadmap: `pa`, `pass`, `bitwarden`, `1password`, `sops`, `secret-tool` and `security` adapters (D20)                                      | todo                     |
+| #  | Step                                                                                                                                      | Status                   |
+| -- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| 1  | Local hardening (see `personal/hardening.md`)                                                                                             | in progress: 2 of 5 done |
+| 2  | Resolve the spec's open questions; scaffold the repo (git init, TS, test runner, MIT `CREDITS.md` for pi-secret-safe, pi-redact, pi-fnox) | done                     |
+| 3  | Core, test-first: matcher (exact + derived forms + prefixes), path/command blocklist, adapter contract, config validation                 | done                     |
+| 4  | Adapters: `env`, `command`, `mise`                                                                                                        | done                     |
+| 5  | pi extension: wire the events from `spec.md`; degraded state; `/motus status`, `/motus continue`                                          | done                     |
+| 6  | Shared config in chezmoi (`~/.config/motus/config.toml`)                                                                                  | todo                     |
+| 7  | Claude Code `PreToolUse` block hook; check whether #54196 is still open                                                                   | done                     |
+| 8  | Smoke test in pi (below)                                                                                                                  | todo                     |
+| 9  | Adapters: `pa`, `1password`                                                                                                               | done                     |
+| 10 | Docs: README, spec, plan and site match the 1.0 state (#29)                                                                               | done                     |
+| 11 | Post-1.0 adapters: `pass`, `bitwarden`, `sops`, `secret-tool`, `security` (D20)                                                           | post-1.0                 |
 
 ## Test plan
 
