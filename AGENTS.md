@@ -10,7 +10,7 @@ The site has one. `docs/` is a standalone Astro project with its own `package.js
 
 ## Design
 
-Read `meta/spec.md` (decisions D1-D13, architecture, failure modes) before changing behavior, and `meta/plan.md` for the build order and test plan. Tests use fixtures only, never real secret values.
+Read `meta/spec.md` (decisions D1-D21, architecture, failure modes) before changing behavior, and `meta/plan.md` for the build order and test plan. Tests use fixtures only, never real secret values.
 
 `meta/personal/` is gitignored and machine-specific: never commit, quote or publish it.
 
