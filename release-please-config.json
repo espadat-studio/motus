@@ -3,7 +3,7 @@
   "packages": {
     ".": {
       "release-type": "node",
-      "package-name": "@espadat-studio/motus",
+      "package-name": "@espadat/motus",
       "changelog-path": "CHANGELOG.md",
       "draft": true,
       "force-tag-creation": true
