@@ -6,14 +6,16 @@ import {
   type ExtensionContext,
   isToolCallEventType,
   type ToolCallEvent,
+  truncateTail,
 } from '@earendil-works/pi-coding-agent'
 
 import { checkBashPaths, checkCommand, checkPath, checkPlaceholders, resolveBlockPaths } from '../src/blocklist.ts'
-import { type Config, DEFAULT_CONFIG_PATH, DEFAULT_PREFIXES } from '../src/config.ts'
+import { type Config, DEFAULT_CONFIG_PATH, DEFAULT_MIN_VALUE_LENGTH, DEFAULT_PREFIXES } from '../src/config.ts'
 import { createMatcher, type Matcher } from '../src/matcher.ts'
 import { describeLoad, loadFromConfig } from '../src/sources.ts'
 
 const REDACTION_FAILED = '[motus: redaction failed, output withheld]'
+const COMMAND_FAILED = '[motus: command failed or its output could not be redacted, output withheld]'
 const PLACEHOLDER_TOOLS = new Set(['write', 'edit', 'bash'])
 const MAX_PATH_LENGTH = 4096
 
@@ -28,13 +30,15 @@ interface State {
   level: 'info' | 'warning' | 'error'
 }
 
-export function createMotus({ configPath, env }: { configPath: string; env: NodeJS.ProcessEnv }) {
+export function createMotus(
+  { configPath, env }: { configPath: string; env: NodeJS.ProcessEnv },
+): (pi: ExtensionAPI) => void {
   const home = env['HOME'] ?? homedir()
 
   return function motus(pi: ExtensionAPI): void {
     let state: State = {
       config: undefined,
-      matcher: createMatcher([], { prefixes: DEFAULT_PREFIXES, minValueLength: 8 }),
+      matcher: createMatcher([], { prefixes: DEFAULT_PREFIXES, minValueLength: DEFAULT_MIN_VALUE_LENGTH }),
       blockPaths: [],
       loadedNames: new Set(),
       degraded: 'secrets are not loaded yet',
@@ -43,9 +47,8 @@ export function createMotus({ configPath, env }: { configPath: string; env: Node
       level: 'error',
     }
 
-    const checkShell = (command: string): string | undefined =>
-      (state.degraded && `session is degraded (${state.degraded})`)
-      || checkCommand(command, state.config?.blockCommands ?? [])
+    const checkShellCommand = (command: string): string | undefined =>
+      checkCommand(command, state.config?.blockCommands ?? [])
       || checkBashPaths(command, state.blockPaths, home)
 
     const checkToolCall = (event: ToolCallEvent, cwd: string): string | undefined => {
@@ -56,8 +59,8 @@ export function createMotus({ configPath, env }: { configPath: string; env: Node
         const reason = checkPlaceholders(JSON.stringify(event.input), state.loadedNames)
         if (reason) return reason
       }
-      if (isToolCallEventType('bash', event)) return checkShell(event.input.command)
-      for (const text of listStrings(event.input)) {
+      if (isToolCallEventType('bash', event)) return checkShellCommand(event.input.command)
+      for (const text of collectStrings(event.input)) {
         if (text.length > MAX_PATH_LENGTH || text.includes('\n')) continue
         const reason = checkPath(text, cwd, state.blockPaths, home)
         if (reason) return reason
@@ -88,7 +91,15 @@ export function createMotus({ configPath, env }: { configPath: string; env: Node
       }
     })
 
-    pi.on('message_end', (event) => ({ message: state.matcher.redact(event.message) }))
+    pi.on('message_end', (event) => {
+      try {
+        return { message: state.matcher.redact(event.message) }
+      } catch {
+        return {
+          message: { ...event.message, content: [{ type: 'text', text: REDACTION_FAILED }] } as typeof event.message,
+        }
+      }
+    })
 
     pi.on('input', (event) => {
       const text = state.matcher.redact(event.text)
@@ -96,12 +107,12 @@ export function createMotus({ configPath, env }: { configPath: string; env: Node
     })
 
     pi.on('user_bash', async (event, ctx) => {
-      const reason = checkShell(event.command)
+      const reason = state.degraded ? `session is degraded (${state.degraded})` : checkShellCommand(event.command)
       if (reason) return { result: bashResult(`motus: blocked: ${reason}`, 1) }
       try {
         return { result: await runRedacted(event.command, event.cwd, state.matcher, ctx) }
       } catch {
-        return { result: bashResult(REDACTION_FAILED, 1) }
+        return { result: bashResult(COMMAND_FAILED, 1) }
       }
     })
 
@@ -140,7 +151,7 @@ async function loadState(configPath: string, cwd: string, env: NodeJS.ProcessEnv
   }
   const matcher = createMatcher(result.secrets, {
     prefixes: config?.prefixes ?? DEFAULT_PREFIXES,
-    minValueLength: config?.minValueLength ?? 8,
+    minValueLength: config?.minValueLength ?? DEFAULT_MIN_VALUE_LENGTH,
   })
   const failed = result.failures.filter(({ required, applies }) => required && applies).map(({ id }) => id)
   return {
@@ -170,15 +181,16 @@ async function runRedacted(command: string, cwd: string, matcher: Matcher, ctx: 
     onData: (data) => chunks.push(data),
     ...(ctx.signal && { signal: ctx.signal }),
   })
-  return bashResult(matcher.redact(Buffer.concat(chunks).toString('utf8')), exitCode ?? undefined)
+  const { content, truncated } = truncateTail(matcher.redact(Buffer.concat(chunks).toString('utf8')))
+  return bashResult(content, exitCode ?? undefined, truncated)
 }
 
-function bashResult(output: string, exitCode: number | undefined) {
-  return { output, exitCode, cancelled: false, truncated: false }
+function bashResult(output: string, exitCode: number | undefined, truncated = false) {
+  return { output, exitCode, cancelled: false, truncated }
 }
 
-function listStrings(value: unknown): string[] {
+function collectStrings(value: unknown): string[] {
   if (typeof value === 'string') return [value]
-  if (value !== null && typeof value === 'object') return Object.values(value).flatMap(listStrings)
+  if (value !== null && typeof value === 'object') return Object.values(value).flatMap(collectStrings)
   return []
 }

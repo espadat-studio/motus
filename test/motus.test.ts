@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, test } from 'node:test'
+import { after, describe, test } from 'node:test'
 
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent'
 
@@ -14,8 +14,12 @@ const NOT_LOADED = 'missing config'
 
 type Handler = (event: Record<string, unknown>, ctx: unknown) => unknown
 
+const homes: string[] = []
+after(() => Promise.all(homes.map((home) => rm(home, { recursive: true, force: true }))))
+
 async function setup(config: unknown = {}) {
   const home = await mkdtemp(join(tmpdir(), 'motus-'))
+  homes.push(home)
   await mkdir(join(home, 'vault'))
   const configPath = join(home, 'config.json')
   if (config !== NOT_LOADED) await writeFile(configPath, JSON.stringify(config))
@@ -89,6 +93,12 @@ describe('degraded state', () => {
     const { emit } = await setup(failing)
     assert.equal((await emit('tool_call', { toolName: 'grep', input: {} }) as { block: boolean }).block, true)
     assert.equal(await emit('tool_call', { toolName: 'ls', input: {} }), undefined)
+  })
+
+  test('allowlisting bash lets the tool through but keeps blockCommands', async () => {
+    const { emit } = await setup({ ...failing, degradedAllowTools: ['bash'] })
+    assert.equal(await emit('tool_call', { toolName: 'bash', input: { command: 'ls' } }), undefined)
+    assert.ok(await emit('tool_call', { toolName: 'bash', input: { command: 'pa show x' } }))
   })
 
   test('blocks user_bash', async () => {
@@ -171,6 +181,14 @@ describe('redaction', () => {
     assert.ok(!JSON.stringify(result.message).includes(TOKEN))
   })
 
+  test('message_end withholds content when redaction fails', async () => {
+    const { emit } = await setup()
+    const message = { role: 'user', content: [{ type: 'text', text: TOKEN }], extra: cyclic() }
+    const result = await emit('message_end', { message }) as { message: { role: string; content: unknown } }
+    assert.equal(result.message.role, 'user')
+    assert.ok(!JSON.stringify(result.message.content).includes(TOKEN))
+  })
+
   test('input redacts pasted secrets', async () => {
     const { emit } = await setup()
     assert.deepEqual(await emit('input', { text: `use ${TOKEN}`, source: 'interactive' }), {
@@ -187,6 +205,17 @@ describe('redaction', () => {
     }
     assert.equal(result.result.output.trim(), '[REDACTED:API_TOKEN]')
     assert.equal(result.result.exitCode, 0)
+  })
+
+  test('user_bash truncates long output after redacting it', async () => {
+    const { emit, home } = await setup()
+    const command = `seq 5000; echo ${TOKEN}`
+    const result = await emit('user_bash', { command, cwd: home, excludeFromContext: false }) as {
+      result: { output: string; truncated: boolean }
+    }
+    assert.equal(result.result.truncated, true)
+    assert.match(result.result.output, /\[REDACTED:API_TOKEN\]\n?$/)
+    assert.ok(!result.result.output.includes('\n1\n'))
   })
 
   test('user_bash rejects blocked commands without running them', async () => {
