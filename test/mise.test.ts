@@ -39,6 +39,8 @@ const listed = {
   'b/mise.toml': '[env]\nB_TOKEN = {age="fixture-ciphertext"}\n',
   'b/mise-stub.json': '{"B_TOKEN":"fixture-b-token-0001"}',
   'plain/mise.toml': '[env]\nPLAIN = "visible"\n',
+  'a/src/.keep': '',
+  'c/sub/.keep': '',
 }
 
 describe('miseSource', () => {
@@ -53,6 +55,28 @@ describe('miseSource', () => {
     ])
     assert.ok(secrets.every(({ source }) => source === 'mise'))
     assert.deepEqual(warnings, [])
+  })
+
+  test('ignores an inherited MISE_ENV for base files', async () => {
+    const { home, env } = await fixture(listed)
+    const secrets = await load(home, { ...env, MISE_ENV: 'prod' }, 'plain')
+    assert.deepEqual(secrets.map(({ name }) => name), ['A_TOKEN', 'PROD_TOKEN', 'B_TOKEN'])
+  })
+
+  test('skips cwd env files that are not active', async () => {
+    const { home, env } = await fixture({
+      ...listed,
+      'e/mise.staging.toml': '[env]\nE_TOKEN = { age = "fixture-ciphertext" }\n',
+      'e/mise-stub.staging.json': '{"E_TOKEN":"fixture-e-token-0001"}',
+    })
+    const warnings: string[] = []
+    await load(home, env, 'e', warnings)
+    assert.deepEqual(warnings, [])
+    assert.equal(await miseSource('mise', '~/list', env).appliesTo({ cwd: join(home, 'e') }), false)
+    const staged = { ...env, MISE_ENV: 'staging' }
+    assert.equal(await miseSource('mise', '~/list', staged).appliesTo({ cwd: join(home, 'e') }), true)
+    const secrets = await load(home, staged, 'e', warnings)
+    assert.deepEqual(secrets.at(-1)?.name, 'E_TOKEN')
   })
 
   test('loads unlisted age keys of the cwd and warns about the drift', async () => {

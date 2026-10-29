@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { readdir, readFile } from 'node:fs/promises'
+import { readdir, readFile, realpath } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -26,20 +26,25 @@ interface AgeFile {
 export function miseSource(id: string, listFile: string, env: NodeJS.ProcessEnv): SecretSource {
   return {
     id,
-    appliesTo: async ({ cwd }) => (await cwdAgeFiles(cwd)).length > 0,
+    appliesTo: async ({ cwd }) => (await cwdAgeFiles(cwd, env)).length > 0,
     load: async ({ cwd, signal, warn }) => {
       const listed = await readList(listFile, env)
-      const drift = (await cwdAgeFiles(cwd)).filter(({ path }) => !listed.includes(path))
+      const drift = (await cwdAgeFiles(cwd, env)).filter(({ path }) => !listed.includes(path))
       for (const { path, keys } of drift) warn(`${path} has age keys missing from ${listFile}: ${keys.join(', ')}`)
       const files = [...listed, ...drift.map(({ path }) => path)]
-      const outcomes = await Promise.all(files.map((path) => loadFile(id, path, env, signal)))
+      const outcomes = await Promise.allSettled(files.map((path) => loadFile(id, path, env, signal)))
+      const realCwd = await realpath(cwd)
       const secrets: Secret[] = []
       const failures: string[] = []
       for (const [index, outcome] of outcomes.entries()) {
+        if (outcome.status === 'fulfilled') {
+          secrets.push(...outcome.value)
+          continue
+        }
         const path = files[index] as string
-        if (Array.isArray(outcome)) secrets.push(...outcome)
-        else if (covers(projectRoot(path), cwd)) failures.push(`${path} failed: ${outcome.message}`)
-        else warn(`${path} failed: ${outcome.message}`)
+        const message = `${path} failed: ${reasonOf(outcome.reason)}`
+        if (covers(projectRoot(path), realCwd)) failures.push(message)
+        else warn(message)
       }
       if (failures.length > 0) throw new PartialLoadError(failures.join('; '), secrets)
       return secrets
@@ -52,11 +57,11 @@ async function readList(listFile: string, env: NodeJS.ProcessEnv): Promise<strin
     throw new Error(`cannot read ${listFile}`)
   })
   const paths = text.split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('#'))
-  return paths.map((line) => {
+  return Promise.all(paths.map((line) => {
     const path = expandHome(line, env)
     if (!isAbsolute(path)) throw new Error(`${listFile} entry "${line}" is not absolute`)
-    return resolve(path)
-  })
+    return realpath(path).catch(() => resolve(path))
+  }))
 }
 
 async function loadFile(
@@ -64,34 +69,31 @@ async function loadFile(
   path: string,
   env: NodeJS.ProcessEnv,
   signal: AbortSignal,
-): Promise<Secret[] | Error> {
-  try {
-    const keys = ageKeys(
-      await readFile(path, 'utf8').catch(() => {
-        throw new Error('cannot read file')
-      }),
-    )
-    const miseEnv = ENV_FILE.exec(basename(path))?.[1]
-    const childEnv = miseEnv && miseEnv !== 'local' ? { ...env, MISE_ENV: miseEnv } : env
-    const { stdout } = await run('mise', ['env', '--json', '-C', projectRoot(path)], {
-      env: childEnv,
-      signal,
-      maxBuffer: 16 * 1024 * 1024,
+): Promise<Secret[]> {
+  const keys = ageKeys(
+    await readFile(path, 'utf8').catch(() => {
+      throw new Error('cannot read file')
+    }),
+  )
+  const miseEnv = ENV_FILE.exec(basename(path))?.[1]
+  const { MISE_ENV: _inherited, ...baseEnv } = env
+  const childEnv = miseEnv && miseEnv !== 'local' ? { ...baseEnv, MISE_ENV: miseEnv } : baseEnv
+  const { stdout } = await run('mise', ['env', '--json', '-C', projectRoot(path)], {
+    env: childEnv,
+    signal,
+    maxBuffer: 16 * 1024 * 1024,
+  })
+    .catch((error: { code?: unknown }) => {
+      throw new Error(
+        typeof error.code === 'number' ? `mise env exited with code ${error.code}` : 'mise env failed to run',
+      )
     })
-      .catch((error: { code?: unknown }) => {
-        throw new Error(
-          typeof error.code === 'number' ? `mise env exited with code ${error.code}` : 'mise env failed to run',
-        )
-      })
-    const values = parseOutput(stdout)
-    return keys.flatMap((name) => {
-      const value = values[name]
-      if (value === undefined) throw new Error(`mise env did not output ${name}`)
-      return value ? [{ name, value, source: id }] : []
-    })
-  } catch (error) {
-    return error instanceof Error ? error : new Error(String(error))
-  }
+  const values = parseOutput(stdout)
+  return keys.flatMap((name) => {
+    const value = values[name]
+    if (value === undefined) throw new Error(`mise env did not output ${name}`)
+    return value ? [{ name, value, source: id }] : []
+  })
 }
 
 function parseOutput(stdout: string): Record<string, string> {
@@ -106,14 +108,22 @@ function parseOutput(stdout: string): Record<string, string> {
   return parsed as Record<string, string>
 }
 
-async function cwdAgeFiles(cwd: string): Promise<AgeFile[]> {
+async function cwdAgeFiles(cwd: string, env: NodeJS.ProcessEnv): Promise<AgeFile[]> {
+  const activeEnvs = (env['MISE_ENV'] ?? '').split(',')
+  const isActive = (name: string): boolean => {
+    const miseEnv = ENV_FILE.exec(name)?.[1]
+    return !miseEnv || miseEnv === 'local' || activeEnvs.includes(miseEnv)
+  }
   const files: AgeFile[] = []
-  for (let dir = resolve(cwd);; dir = dirname(dir)) {
+  for (let dir = await realpath(cwd);; dir = dirname(dir)) {
     for (const [sub, pattern] of CANDIDATES) {
-      const names = await readdir(join(dir, sub)).catch(() => [])
-      for (const name of names.filter((name) => pattern.test(name)).sort()) {
+      const names = await readdir(join(dir, sub)).catch((error: { code?: unknown }) => {
+        if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return []
+        throw error
+      })
+      for (const name of names.filter((name) => pattern.test(name) && isActive(name)).sort()) {
         const path = join(dir, sub, name)
-        const keys = ageKeys(await readFile(path, 'utf8').catch(() => ''))
+        const keys = ageKeys(await readFile(path, 'utf8'))
         if (keys.length > 0) files.push({ path, keys })
       }
     }
@@ -131,7 +141,7 @@ function projectRoot(path: string): string {
 }
 
 function covers(root: string, cwd: string): boolean {
-  const path = relative(root, resolve(cwd))
+  const path = relative(root, cwd)
   return !path.startsWith('..') && !isAbsolute(path)
 }
 
@@ -140,4 +150,8 @@ function expandHome(path: string, env: NodeJS.ProcessEnv): string {
   const home = env['HOME']
   if (home === undefined) throw new Error('HOME is not set')
   return home + path.slice(1)
+}
+
+function reasonOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
