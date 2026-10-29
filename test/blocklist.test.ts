@@ -92,6 +92,8 @@ describe('checkCommand heredocs', () => {
     `cat <<'A' <<'B'\n${body}A\n${body}B`,
     'cat <<EOF\nplain text\nEOF',
     'cat <<<"$HOME"',
+    "cat <<'EOF'",
+    'echo $((1 << 2))',
   ]
   for (const command of allowed) {
     test(`allows ${JSON.stringify(command)}`, () => {
@@ -111,6 +113,14 @@ describe('checkCommand heredocs', () => {
     `echo "$(cat <<'EOF'\n${tricky}EOF\n)"; env`,
     "cat <<'EOF'\npam s x",
     'echo "$(cat <<EOF\nsafe\n)"',
+    "cat <<'EOF' |\npam s x\nEOF\nsh",
+    `echo "$(cat <<'EOF'\npam s x\nEOF\n)" | sh`,
+    "source /dev/stdin <<'EOF'\npam s x\nEOF",
+    ". /dev/stdin <<'EOF'\npam s x\nEOF",
+    `eval "$(cat <<'EOF'\npam s x\nEOF\n)"`,
+    `bash -c "$(cat <<'EOF'\npam s x\nEOF\n)"`,
+    '((y = 1 << 2))\nenv\n2',
+    '(( $(pam s x) ))',
   ]
   for (const command of blocked) {
     test(`blocks ${JSON.stringify(command)}`, () => {

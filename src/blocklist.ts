@@ -11,6 +11,7 @@ const WRAPPER_ARG_FLAGS = new Map([
 ])
 const KEYWORDS = new Set(['!', '{', '}', 'if', 'then', 'else', 'elif', 'do', 'while', 'until'])
 const SHELLS = new Set(['bash', 'sh', 'zsh'])
+const SCRIPT_RUNNERS = new Set([...SHELLS, 'eval', 'source', '.'])
 const HOME_PREFIXES = ['~', '$HOME', '${HOME}', '"$HOME"', '"${HOME}"']
 const ASSIGNMENT = /^[A-Za-z_]\w*=/
 const SCRIPT_FLAG = /^-[a-z]*c[a-z]*$/
@@ -21,7 +22,7 @@ const PATH_CONTINUES = '(?![\\w.-])'
 interface Heredoc {
   delimiter: string
   isQuoted: boolean
-  stripsTabs: boolean
+  shouldStripTabs: boolean
 }
 
 class ParseError extends Error {}
@@ -72,7 +73,9 @@ export function checkPlaceholders(input: string, loadedNames: ReadonlySet<string
 }
 
 function* listSimpleCommands(source: string): Generator<string[]> {
-  for (const words of splitCommands(source)) {
+  const bodies: string[] = []
+  const commands = splitCommands(source, bodies)
+  for (const words of commands) {
     const command = skipPrefixes(words)
     const name = command[0]
     if (name === undefined) continue
@@ -84,6 +87,13 @@ function* listSimpleCommands(source: string): Generator<string[]> {
     const script = command[flag + 1] === '--' ? command[flag + 2] : command[flag + 1]
     if (script !== undefined) yield* listSimpleCommands(script)
   }
+  if (!commands.some(runsScript)) return
+  for (const body of bodies) yield* listSimpleCommands(body)
+}
+
+function runsScript(words: string[]): boolean {
+  const name = skipPrefixes(words)[0]
+  return name !== undefined && SCRIPT_RUNNERS.has(basename(name))
 }
 
 function skipPrefixes(words: string[]): string[] {
@@ -106,12 +116,11 @@ function skipPrefixes(words: string[]): string[] {
   return words.slice(isWrapperTheCommand ? lastWrapper : index)
 }
 
-function splitCommands(source: string): string[][] {
+function splitCommands(source: string, bodies: string[]): string[][] {
   const commands: string[][] = []
   let words: string[] = []
   let word: string | undefined
   let heredocs: Heredoc[] = []
-  let lineStart = 0
   const endWord = (): void => {
     if (word !== undefined) words.push(word)
     word = undefined
@@ -122,7 +131,7 @@ function splitCommands(source: string): string[][] {
     words = []
   }
   const substitute = ([start, end]: [number, number]): number => {
-    commands.push(...splitCommands(source.slice(start, end)))
+    commands.push(...splitCommands(source.slice(start, end), bodies))
     word ??= ''
     return end
   }
@@ -132,7 +141,11 @@ function splitCommands(source: string): string[][] {
     const substitution = findSubstitution(source, index)
     if (substitution !== undefined)
       index = substitute(substitution)
-    else if (source.startsWith('<<<', index)) {
+    else if (source.startsWith('((', index)) {
+      const end = findClosing(source, '))', index + 2)
+      commands.push(...listBodySubstitutions(source.slice(index + 2, end), bodies))
+      index = end + 1
+    } else if (source.startsWith('<<<', index)) {
       word = (word ?? '') + '<<<'
       index += 2
     } else if (source.startsWith('<<', index)) {
@@ -142,14 +155,12 @@ function splitCommands(source: string): string[][] {
       index = end - 1
     } else if (char === '\n' && heredocs.length > 0) {
       endCommand()
-      const [bodies, end] = readBodies(source, index, heredocs)
-      const isFedToShell = commands.slice(lineStart).some(readsScriptFromStdin)
-      for (const [body, { isQuoted }] of bodies) {
-        if (isFedToShell) commands.push(...splitCommands(body))
-        else if (!isQuoted) commands.push(...listBodySubstitutions(body))
+      const [read, end] = readBodies(source, index, heredocs)
+      for (const [body, { isQuoted }] of read) {
+        bodies.push(body)
+        if (!isQuoted) commands.push(...listBodySubstitutions(body, bodies))
       }
       heredocs = []
-      lineStart = commands.length
       index = end
     } else if (char === '\\') {
       word = (word ?? '') + (source[index + 1] ?? '')
@@ -173,12 +184,10 @@ function splitCommands(source: string): string[][] {
       }
     } else if (char === ' ' || char === '\t')
       endWord()
-    else if (SEPARATORS.has(char)) {
+    else if (SEPARATORS.has(char))
       endCommand()
-      if (char === '\n') lineStart = commands.length
-    } else {
+    else
       word = (word ?? '') + char
-    }
   }
   endCommand()
   return commands
@@ -218,8 +227,8 @@ function findClosingParen(source: string, from: number): number {
 
 function readHeredoc(source: string, from: number): [Heredoc, number] {
   let index = from + 2
-  const stripsTabs = source[index] === '-'
-  if (stripsTabs) index++
+  const shouldStripTabs = source[index] === '-'
+  if (shouldStripTabs) index++
   while (source[index] === ' ' || source[index] === '\t') index++
   let delimiter = ''
   let isQuoted = false
@@ -239,44 +248,41 @@ function readHeredoc(source: string, from: number): [Heredoc, number] {
     }
   }
   if (delimiter === '' && !isQuoted) throw new ParseError('heredoc has no delimiter')
-  return [{ delimiter, isQuoted, stripsTabs }, index]
+  return [{ delimiter, isQuoted, shouldStripTabs }, index]
 }
 
 function readBodies(source: string, newline: number, heredocs: Heredoc[]): [Array<[string, Heredoc]>, number] {
   const bodies: Array<[string, Heredoc]> = []
   let start = newline + 1
   for (const heredoc of heredocs) {
-    for (let lineStart = start;;) {
-      if (lineStart > source.length) throw new ParseError(`unterminated heredoc "${heredoc.delimiter}"`)
-      const lineEnd = findClosing(source, '\n', lineStart)
-      const line = source.slice(lineStart, lineEnd)
-      if ((heredoc.stripsTabs ? line.replace(/^\t+/, '') : line) === heredoc.delimiter) {
-        bodies.push([source.slice(start, lineStart), heredoc])
-        start = lineEnd + 1
-        break
-      }
+    let lineStart = start
+    let lineEnd = findClosing(source, '\n', lineStart)
+    while (!isTerminator(source.slice(lineStart, lineEnd), heredoc)) {
+      if (lineEnd === source.length) throw new ParseError(`unterminated heredoc "${heredoc.delimiter}"`)
       lineStart = lineEnd + 1
+      lineEnd = findClosing(source, '\n', lineStart)
     }
+    bodies.push([source.slice(start, lineStart), heredoc])
+    start = lineEnd + 1
   }
   return [bodies, start - 1]
 }
 
-function listBodySubstitutions(body: string): string[][] {
+function isTerminator(line: string, { delimiter, shouldStripTabs }: Heredoc): boolean {
+  return (shouldStripTabs ? line.replace(/^\t+/, '') : line) === delimiter
+}
+
+function listBodySubstitutions(body: string, bodies: string[]): string[][] {
   const commands: string[][] = []
   for (let index = 0; index < body.length; index++) {
     const substitution = findSubstitution(body, index)
     if (body[index] === '\\') index++
     else if (substitution !== undefined) {
-      commands.push(...splitCommands(body.slice(...substitution)))
+      commands.push(...splitCommands(body.slice(...substitution), bodies))
       index = substitution[1]
     }
   }
   return commands
-}
-
-function readsScriptFromStdin(words: string[]): boolean {
-  const [name, ...args] = skipPrefixes(words)
-  return name !== undefined && SHELLS.has(basename(name)) && !args.some((arg) => SCRIPT_FLAG.test(arg))
 }
 
 function matchesEntry(words: readonly string[], entry: string): boolean {
