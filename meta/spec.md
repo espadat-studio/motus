@@ -170,7 +170,7 @@ Follows semver from 1.0. Changing any of these is a major release.
 - Source contract: `SecretSource` and `Secret`, with the throw-on-failure and `appliesTo` semantics.
 - Placeholder: `[REDACTED:NAME]`.
 
-Block reasons, status text, derived forms and the modules under `src/` may change in a minor release.
+Block reasons, status text and derived forms may change in a minor release. So may any module under `src/` other than the source contract.
 
 ## Failure modes
 

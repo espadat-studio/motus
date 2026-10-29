@@ -22,6 +22,8 @@ blockCommands = ["pa", "gh auth token", "op read"]
 blockCommands = ["env", "printenv", "mise env", "cat .env*"]
 ```
 
+These blocks apply to tool calls only. Listing `env` here does not stop `!env`.
+
 The hook fails closed. A missing or invalid config, malformed input or a crash all deny the call. Setup is in [Install](/install/#claude-code).
 
 ## Not covered

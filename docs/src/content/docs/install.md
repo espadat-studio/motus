@@ -52,4 +52,6 @@ Then add the hook to `~/.claude/settings.json`:
 }
 ```
 
+Create `~/.config/motus/config.toml` first. Without it the hook fails closed and denies every `Read` and `Bash` call.
+
 The hook blocks only. It does not redact, and it does not cover `!` shell mode. Read [Claude Code](/claude-code/) before you rely on it.

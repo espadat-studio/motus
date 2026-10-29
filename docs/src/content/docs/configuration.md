@@ -23,6 +23,8 @@ listFile = "~/.config/rotate-mise-secrets/files"
 blockCommands = ["env", "printenv", "mise env", "cat .env*"]
 ```
 
+pi ignores the `[claudeCode]` table: it redacts `env` output instead of blocking it. Only the Claude Code hook merges those commands into its blocks.
+
 ## Keys
 
 | Key                        | Default                                              | Read by         | Meaning                                                         |

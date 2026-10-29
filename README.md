@@ -59,7 +59,7 @@ Add the hook to `~/.claude/settings.json`:
 }
 ```
 
-The hook reads the same `~/.config/motus/config.toml`. It denies `Read` paths and `Bash` commands that match `blockPaths`, `blockCommands` or `claudeCode.blockCommands`. Invalid config, bad input or a crash denies the call too.
+The hook reads the same `~/.config/motus/config.toml`. Create it first: without it the hook denies every `Read` and `Bash` call. It denies `Read` paths and `Bash` commands that match `blockPaths`, `blockCommands` or `claudeCode.blockCommands`. Invalid config, bad input or a crash denies the call too.
 
 > [!WARNING]
 > `!` shell mode bypasses motus. Never run `!env`, `!mise env` or `!pa …` in Claude Code.
@@ -182,7 +182,7 @@ These follow semver after 1.0. Changing one is a major release.
 - **Source contract**: the `SecretSource` and `Secret` shapes in [`meta/spec.md`](meta/spec.md#source-adapters-d3).
 - **Placeholder**: the `[REDACTED:NAME]` text.
 
-Everything else can change in a minor release: exact block reasons, status text, derived forms and the internal modules under `src/`.
+Everything else can change in a minor release: exact block reasons, status text, derived forms and any module under `src/` other than the source contract.
 
 ## Post-1.0
 

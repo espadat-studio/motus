@@ -28,7 +28,7 @@ These follow semver. Changing one is a major release.
 | Source contract | The `SecretSource` and `Secret` shapes: `load` throws on failure, `appliesTo` scopes a required source |
 | Placeholder     | The `[REDACTED:NAME]` text                                                                             |
 
-Block reasons, status text, derived forms and the modules under `src/` can change in a minor release.
+Block reasons, status text and derived forms can change in a minor release. So can any module under `src/` other than the source contract.
 
 ## After 1.0
 
