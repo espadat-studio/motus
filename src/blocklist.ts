@@ -192,12 +192,16 @@ function escapeRegExp(text: string): string {
 function expandPath(entry: string, env: NodeJS.ProcessEnv): string {
   const home = env['HOME']
   if (home === undefined) throw new Error('HOME is not set')
-  return entry.replace(TILDE, home).replace(/\$(?:\{(\w+)\}|(\w+))/g, (_match, braced, bare) => {
-    const name: string = braced ?? bare
-    const value = env[name]
-    if (value === undefined) throw new Error(`blockPaths entry "${entry}": $${name} is not set`)
-    return value
-  })
+  return entry.replace(TILDE, home).replace(
+    /\$(?:\{(\w+)(?::-([^}]*))?\}|(\w+))/g,
+    (_match, braced, fallback: string | undefined, bare) => {
+      const name: string = braced ?? bare
+      const value = env[name]
+      if (fallback !== undefined && !value) return fallback.replace(TILDE, home)
+      if (value === undefined) throw new Error(`blockPaths entry "${entry}": $${name} is not set`)
+      return value
+    },
+  )
 }
 
 function resolveRealpath(path: string): string {

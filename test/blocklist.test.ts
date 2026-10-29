@@ -89,6 +89,17 @@ describe('paths', () => {
     assert.throws(() => resolveBlockPaths(['$NOPE/x'], env), /\$NOPE/)
   })
 
+  test('uses the fallback of an unset or empty variable, expanding ~', () => {
+    assert.deepEqual(resolveBlockPaths(['${NOPE:-~/store}/x', '${EMPTY:-/fallback}'], { ...env, EMPTY: '' }), [
+      join(home, 'store/x'),
+      '/fallback',
+    ])
+  })
+
+  test('ignores the fallback of a set variable', () => {
+    assert.deepEqual(resolveBlockPaths(['${PA_DIR:-/fallback}/x'], env), [join(home, 'store/x')])
+  })
+
   test('throws on a relative entry', () => {
     assert.throws(() => resolveBlockPaths(['rel/x'], env), /absolute/)
   })
