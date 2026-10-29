@@ -1,26 +1,24 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, test } from 'node:test'
+import { after, describe, test } from 'node:test'
 
-import {
-  bashPathBlockReason,
-  commandBlockReason,
-  pathBlockReason,
-  placeholderBlockReason,
-  resolveBlockPaths,
-} from '../src/blocklist.ts'
+import { checkBashPaths, checkCommand, checkPath, checkPlaceholders, resolveBlockPaths } from '../src/blocklist.ts'
 
 const COMMANDS = ['pa', 'gh auth token', 'mise env', 'cat .env*']
 
-describe('commandBlockReason', () => {
+describe('checkCommand', () => {
   const blocked = [
     'pa show x',
     'echo $(pa s x)',
     'echo "$(pa s x)"',
     'echo `pa show x`',
     'sudo pa show x',
+    'sudo -u root pa show x',
+    'xargs -I {} pa show {}',
+    'sh -c -- "pa show x"',
+    'echo "$(pa show x',
     "bash -c 'pa show x'",
     'sh -lc "pa show x"',
     'zsh -c "echo ok; pa show x"',
@@ -40,10 +38,11 @@ describe('commandBlockReason', () => {
     'mise exec -- env',
     'cat .env.local',
     'cat -n .env',
+    'cat ./.env',
   ]
   for (const command of blocked) {
     test(`blocks ${command}`, () => {
-      assert.ok(commandBlockReason(command, COMMANDS))
+      assert.ok(checkCommand(command, COMMANDS))
     })
   }
 
@@ -59,12 +58,12 @@ describe('commandBlockReason', () => {
   ]
   for (const command of allowed) {
     test(`allows ${command}`, () => {
-      assert.equal(commandBlockReason(command, COMMANDS), undefined)
+      assert.equal(checkCommand(command, COMMANDS), undefined)
     })
   }
 
   test('reason names the entry', () => {
-    assert.match(commandBlockReason('gh auth token', COMMANDS) ?? '', /"gh auth token"/)
+    assert.match(checkCommand('gh auth token', COMMANDS) ?? '', /"gh auth token"/)
   })
 })
 
@@ -75,6 +74,7 @@ describe('paths', () => {
   mkdirSync(join(home, 'store'))
   symlinkSync(join(home, 'store'), join(home, 'link'))
   const env = { HOME: home, PA_DIR: join(home, 'link') }
+  after(() => rmSync(home, { recursive: true }))
   const blockPaths = resolveBlockPaths(['~/.config/mise/age.txt', '$PA_DIR/', '${HOME}/missing/dir'], env)
 
   test('expands and resolves entries', () => {
@@ -93,7 +93,7 @@ describe('paths', () => {
     assert.throws(() => resolveBlockPaths(['rel/x'], env), /absolute/)
   })
 
-  describe('pathBlockReason', () => {
+  describe('checkPath', () => {
     const cases: Array<[string, string, boolean]> = [
       ['~/.config/mise/age.txt', '/', true],
       ['age.txt', join(home, '.config/mise'), true],
@@ -106,44 +106,46 @@ describe('paths', () => {
     ]
     for (const [arg, cwd, isBlocked] of cases) {
       test(`${isBlocked ? 'blocks' : 'allows'} ${arg} from ${cwd}`, () => {
-        assert.equal(Boolean(pathBlockReason(arg, cwd, blockPaths, home)), isBlocked)
+        assert.equal(Boolean(checkPath(arg, cwd, blockPaths, home)), isBlocked)
       })
     }
   })
 
-  describe('bashPathBlockReason', () => {
+  describe('checkBashPaths', () => {
     const blocked = [
       'cat ~/.config/mise/age.txt',
       'cat $HOME/.config/mise/age.txt',
       'cat "${HOME}/.config/mise/age.txt"',
       `cat ${home}/.config/mise/age.txt`,
       'ls ~/store/identities',
+      'cat "$HOME"/.config/mise/age.txt',
       "bash -c 'cat ~/.config/mise/age.txt'",
     ]
     for (const command of blocked) {
       test(`blocks ${command}`, () => {
-        assert.ok(bashPathBlockReason(command, blockPaths, home))
+        assert.ok(checkBashPaths(command, blockPaths, home))
       })
     }
 
     test('allows unrelated paths', () => {
-      assert.equal(bashPathBlockReason('cat ~/.config/mise/config.toml', blockPaths, home), undefined)
+      assert.equal(checkBashPaths('cat ~/.config/mise/config.toml', blockPaths, home), undefined)
+      assert.equal(checkBashPaths('ls ~/storefront ~/store-old', blockPaths, home), undefined)
     })
   })
 })
 
-describe('placeholderBlockReason', () => {
+describe('checkPlaceholders', () => {
   const loaded = new Set(['ALCHEMY_KEY'])
 
   test('blocks a loaded name', () => {
-    assert.match(placeholderBlockReason('RPC=https://x/[REDACTED:ALCHEMY_KEY]', loaded) ?? '', /ALCHEMY_KEY/)
+    assert.match(checkPlaceholders('RPC=https://x/[REDACTED:ALCHEMY_KEY]', loaded) ?? '', /ALCHEMY_KEY/)
   })
 
   test('allows an unloaded name', () => {
-    assert.equal(placeholderBlockReason('see [REDACTED:OTHER]', loaded), undefined)
+    assert.equal(checkPlaceholders('see [REDACTED:OTHER]', loaded), undefined)
   })
 
   test('allows plain input', () => {
-    assert.equal(placeholderBlockReason('ALCHEMY_KEY=$ALCHEMY_KEY', loaded), undefined)
+    assert.equal(checkPlaceholders('ALCHEMY_KEY=$ALCHEMY_KEY', loaded), undefined)
   })
 })
