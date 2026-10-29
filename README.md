@@ -68,6 +68,13 @@ entries = ["web/github"]
 timeoutMs = 30000
 ```
 
+## Claude Code
+
+> [!WARNING]
+> `!` shell mode bypasses motus. Never run `!env`, `!mise env` or `!pa …` in Claude Code.
+
+Claude Code adds `!` commands and their output to the conversation, so values reach the model on the next request. `!` commands are not tool calls, so `PreToolUse` never fires and `motus-cc-hook` never sees them. pi has no such gap: its `user_bash` handler redacts `!` output. Read secret values in your own terminal.
+
 ## Use
 
 - Session start reports how many secrets loaded and from which sources, never values.
