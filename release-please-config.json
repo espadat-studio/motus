@@ -6,7 +6,8 @@
       "package-name": "@espadat/motus",
       "changelog-path": "CHANGELOG.md",
       "draft": true,
-      "force-tag-creation": true
+      "force-tag-creation": true,
+      "release-as": "1.0.0"
     }
   },
   "include-component-in-tag": false,
