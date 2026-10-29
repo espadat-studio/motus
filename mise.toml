@@ -17,6 +17,10 @@ alias = "t"
 description = "Run the tests"
 run = "node --test 'test/**/*.test.ts'"
 
+[tasks.verify-pack]
+description = "Pack the package, install the tarball in a temp dir and run both entry points"
+run = "scripts/verify-pack.sh"
+
 [tasks.dev]
 alias = "d"
 description = "Run pi with the local extension loaded"
