@@ -20,6 +20,20 @@ pi install npm:@espadat-studio/motus
 
 Create `~/.config/motus/config.json` (see [`meta/spec.md`](meta/spec.md#config-configmotusconfigjson)). Without it every session starts degraded.
 
+### 1Password
+
+```json
+{
+  "type": "1password",
+  "refs": { "API_TOKEN": "op://dev/api/token" },
+  "fromEnv": true
+}
+```
+
+- `refs` names each secret by its key. `fromEnv: true` also loads env vars whose values are `op://` references, named by the var.
+- All refs resolve in one `op inject` call at session start. Expect one 1Password biometric or session prompt then, every session.
+- A locked or missing `op` fails the source. With `required: true` (the default) the session starts degraded.
+
 ## Use
 
 - Session start reports how many secrets loaded and from which sources, never values.

@@ -6,6 +6,7 @@ import type { SecretSource } from './sources.ts'
 import { commandSource } from './sources/command.ts'
 import { envSource } from './sources/env.ts'
 import { miseSource } from './sources/mise.ts'
+import { isOnePasswordRef, isSecretName, onePasswordSource } from './sources/onepassword.ts'
 
 export interface ConfiguredSource {
   source: SecretSource
@@ -57,6 +58,20 @@ const ADAPTERS: Record<
     create: (id, { listFile }, at, env) => {
       if (typeof listFile !== 'string' || listFile === '') throw new Error(`${at}.listFile must be a non-empty string`)
       return miseSource(id, listFile, env)
+    },
+  },
+  '1password': {
+    keys: ['refs', 'fromEnv'],
+    create: (id, { refs = {}, fromEnv = false }, at, env) => {
+      const refMap = asObject(refs, `${at}.refs`)
+      for (const [name, ref] of Object.entries(refMap)) {
+        if (!isSecretName(name)) throw new Error(`${at}.refs key ${JSON.stringify(name)} is not a valid name`)
+        if (typeof ref !== 'string' || !isOnePasswordRef(ref))
+          throw new Error(`${at}.refs.${name} must be an op:// reference`)
+      }
+      if (typeof fromEnv !== 'boolean') throw new Error(`${at}.fromEnv must be a boolean`)
+      if (Object.keys(refMap).length === 0 && !fromEnv) throw new Error(`${at} needs refs or fromEnv: true`)
+      return onePasswordSource(id, refMap as Record<string, string>, fromEnv, env)
     },
   },
 }

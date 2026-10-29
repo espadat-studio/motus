@@ -35,6 +35,16 @@ describe('parseConfig', () => {
     assert.deepEqual(sources.map(({ source }) => source.id), ['env', 'command'])
   })
 
+  test('accepts a 1password source with refs or fromEnv', () => {
+    const { sources } = parseConfig({
+      sources: [
+        { type: '1password', refs: { API_TOKEN: 'op://dev/api/token' } },
+        { type: '1password', id: 'op-env', fromEnv: true },
+      ],
+    })
+    assert.deepEqual(sources.map(({ source }) => source.id), ['env', '1password', 'op-env'])
+  })
+
   test('reads the claudeCode block', () => {
     assert.deepEqual(parseConfig({ claudeCode: { blockCommands: ['env'] } }).claudeCode, { blockCommands: ['env'] })
   })
@@ -55,6 +65,20 @@ describe('parseConfig', () => {
     ],
     ['command without command', { sources: [{ type: 'command' }] }, /sources\[0\].command must be a non-empty string/],
     ['mise without listFile', { sources: [{ type: 'mise' }] }, /sources\[0\].listFile must be a non-empty string/],
+    [
+      '1password without refs or fromEnv',
+      { sources: [{ type: '1password', refs: {} }] },
+      /sources\[0\] needs refs or fromEnv: true/,
+    ],
+    ['1password with a non-op ref', {
+      sources: [{ type: '1password', refs: { API_TOKEN: 'https://example.com' } }],
+    }, /sources\[0\].refs.API_TOKEN must be an op:\/\/ reference/],
+    ['1password with a bad ref name', {
+      sources: [{ type: '1password', refs: { 'A\nB': 'op://dev/api/token' } }],
+    }, /sources\[0\].refs key "A\\nB" is not a valid name/],
+    ['1password with non-boolean fromEnv', {
+      sources: [{ type: '1password', fromEnv: 'yes' }],
+    }, /sources\[0\].fromEnv must be a boolean/],
     ['unknown claudeCode key', { claudeCode: { block: [] } }, /claudeCode has unknown key "block"/],
     ['duplicate source ids', {
       sources: [{ type: 'command', command: 'true' }, { type: 'command', command: 'true' }],
