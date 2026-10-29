@@ -31,7 +31,7 @@ export function paSource(id: string, { dir, entries, minValueLength, env }: PaOp
 
 async function listEntries(dir: string, options: RunOptions): Promise<string[]> {
   const names = (await runPa(['list'], options, 'pa list'))
-    .split('\n')
+    .split(/\r?\n/)
     .filter((name) => name !== '' && name.split('/').at(-1) !== 'meta')
   if (names.length === 0) throw new Error(`no entries in ${dir}`)
   return names

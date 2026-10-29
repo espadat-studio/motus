@@ -34,6 +34,40 @@ Create `~/.config/motus/config.toml` (see [`meta/spec.md`](meta/spec.md#config-c
 - All refs resolve in one `op inject` call at session start. Expect one 1Password biometric or session prompt then, every session.
 - A locked or missing `op` fails the source. With `required: true` (the default) the session starts degraded.
 
+### pa
+
+Loads `pa` entries at session start, so their values get redacted. `pa show` stays blocked.
+
+```toml
+[[sources]]
+type = "pa"
+entries = ["web/github", "mail"]
+```
+
+- Exactly one of `entries` or `whole = true`. `whole` loads every entry except `*/meta`.
+- `dir` defaults to `${PA_DIR:-~/.local/share/pa}`.
+- Kept lines: non-blank, at least `minValueLength` chars. One kept line gives `web/github`. Several give `web/github:1`, `web/github:2`. An entry with none loads nothing.
+- Entries decrypt one by one within the source's `timeoutMs` (default 10 s). Raise it for long `entries` lists or a large `whole` store.
+
+A store created by pa without a plugin uses a plain age key, so it decrypts with no prompt. Use `whole` for it, or for a TPM-keyed store (`age-plugin-tpm`). A YubiKey-keyed store asks for a PIN and a touch on every startup. The PIN needs a GUI pinentry, because pi owns the terminal. Without one, the source times out and the session degrades. Prefer a short `entries` list there.
+
+Several stores mean several sources, each with its own `id` and `dir`. Here a TPM store loads whole and a YubiKey store loads one entry:
+
+```toml
+[[sources]]
+type = "pa"
+id = "pa-machine"
+dir = "~/.local/share/pa-machine"
+whole = true
+
+[[sources]]
+type = "pa"
+id = "pa-yubikey"
+dir = "~/.local/share/pa"
+entries = ["web/github"]
+timeoutMs = 30000
+```
+
 ## Use
 
 - Session start reports how many secrets loaded and from which sources, never values.
@@ -41,31 +75,6 @@ Create `~/.config/motus/config.toml` (see [`meta/spec.md`](meta/spec.md#config-c
 - `/motus status`: loaded counts, failures and state.
 - `/motus continue`: accept partial protection for this session. Blocks still apply.
 - There is no `/motus off`. Read secret values in your own terminal.
-
-## `pa` source
-
-Loads `pa` entries at session start, so their values get redacted. `pa show` stays blocked.
-
-```json
-{ "type": "pa", "entries": ["web/github", "mail"] }
-{ "type": "pa", "whole": true }
-```
-
-- Exactly one of `entries` or `whole`. `whole` loads every entry except `*/meta`.
-- `dir` defaults to `${PA_DIR:-~/.local/share/pa}`.
-- Names: `web/github` for a single-line entry. A multi-line entry gives `web/github:1`, `web/github:2`, one per line of at least `minValueLength` chars.
-- Entries decrypt one by one within the source's `timeoutMs` (default 10 s). Raise it for long `entries` lists or a large `whole` store.
-
-The default store uses a plain age key, so it decrypts with no prompt. Use `whole` for it, or for a TPM-keyed store (`age-plugin-tpm`). A YubiKey-keyed store asks for a PIN and a touch on every startup. The PIN needs a GUI pinentry, because pi owns the terminal. Without one, the source times out and the session degrades. Prefer a short `entries` list there.
-
-Several stores mean several sources, each with its own `id` and `dir`:
-
-```json
-"sources": [
-  { "type": "pa", "id": "pa-machine", "dir": "~/.local/share/pa-machine", "whole": true },
-  { "type": "pa", "id": "pa-personal", "entries": ["web/github"], "timeoutMs": 30000 }
-]
-```
 
 ## Docs
 

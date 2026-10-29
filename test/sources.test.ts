@@ -176,8 +176,12 @@ describe('paSource', () => {
       ...ctx,
       signal: controller.signal,
     })
+    const deadline = Date.now() + 1000
+    const pause = () => new Promise((resolve) => setTimeout(resolve, 10))
     let pid = ''
-    while (!pid) pid = await readFile(join(dir, 'pid'), 'utf8').catch(() => '')
+    while (!pid && Date.now() < deadline)
+      pid = await readFile(join(dir, 'pid'), 'utf8').catch(() => pause().then(() => ''))
+    assert.ok(pid, 'fake pa never started')
     controller.abort()
     await assert.rejects(loading)
     const isAlive = (): boolean => {
@@ -187,8 +191,7 @@ describe('paSource', () => {
         return false
       }
     }
-    const deadline = Date.now() + 1000
-    while (isAlive() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10))
+    while (isAlive() && Date.now() < deadline) await pause()
     assert.equal(isAlive(), false)
   })
 })
@@ -201,12 +204,13 @@ describe('pa source config', () => {
 
   test('defaults dir to PA_DIR', async () => {
     const { dir, env } = await fakePaStore({ mail: 'fixture-pass-0001' })
-    assert.deepEqual(await loadVia({ ...env, PA_DIR: dir }), ['mail'])
+    assert.deepEqual(await loadVia({ ...env, HOME: '/', PA_DIR: dir }), ['mail'])
   })
 
-  test('expands ~ in dir', async () => {
+  test('expands ~ and env vars in dir', async () => {
     const { dir, env } = await fakePaStore({ mail: 'fixture-pass-0001' })
     assert.deepEqual(await loadVia({ ...env, HOME: dirname(dir) }, '~/store'), ['mail'])
+    assert.deepEqual(await loadVia({ ...env, HOME: '/', STORES: dirname(dir) }, '$STORES/store'), ['mail'])
   })
 
   test('falls back to ~/.local/share/pa', async () => {

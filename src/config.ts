@@ -4,6 +4,7 @@ import { isAbsolute, join } from 'node:path'
 
 import { parse } from 'smol-toml'
 
+import { expandPath } from './blocklist.ts'
 import type { SecretSource } from './sources.ts'
 import { commandSource } from './sources/command.ts'
 import { envSource } from './sources/env.ts'
@@ -34,8 +35,7 @@ export const DEFAULT_PREFIXES = ['sk-ant-', 'ghp_', 'github_pat_', 'AKIA', 'xox[
 
 export const DEFAULT_TIMEOUT_MS = 10_000
 export const DEFAULT_MIN_VALUE_LENGTH = 8
-const DEFAULT_PA_DIR = '~/.local/share/pa'
-const TILDE = /^~(?=\/|$)/
+const DEFAULT_PA_DIR = '${PA_DIR:-~/.local/share/pa}'
 const TOP_LEVEL_KEYS = [
   'sources',
   'prefixes',
@@ -94,7 +94,7 @@ const ADAPTERS: Record<
       if (dir !== undefined && (typeof dir !== 'string' || dir === ''))
         throw new Error(`${at}.dir must be a non-empty string`)
       return paSource(id, {
-        dir: resolvePaDir(dir ?? (env['PA_DIR'] || DEFAULT_PA_DIR), at, env),
+        dir: resolvePaDir(dir ?? DEFAULT_PA_DIR, at, env),
         minValueLength,
         env,
         ...(names && { entries: names }),
@@ -104,8 +104,7 @@ const ADAPTERS: Record<
 }
 
 function resolvePaDir(dir: string, at: string, env: NodeJS.ProcessEnv): string {
-  if (TILDE.test(dir) && !env['HOME']) throw new Error(`${at}.dir needs HOME to expand ~`)
-  const expanded = dir.replace(TILDE, env['HOME'] ?? '')
+  const expanded = expandPath(dir, env, `${at}.dir`)
   if (!isAbsolute(expanded)) throw new Error(`${at}.dir is not absolute after expansion`)
   return expanded
 }
