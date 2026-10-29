@@ -9,7 +9,7 @@ Each step is one atomic commit. Git user: `sripwoud`. Don't push until told.
 | 3 | Core, test-first: matcher (exact + derived forms + prefixes), path/command blocklist, adapter contract, config validation                 | todo                     |
 | 4 | Adapters: `env`, `command`, `mise`                                                                                                        | todo                     |
 | 5 | pi extension: wire the events from `spec.md`; degraded state; `/motus status`, `/motus continue`                                          | todo                     |
-| 6 | Shared config in chezmoi (`~/.config/motus/config.json`)                                                                                  | todo                     |
+| 6 | Shared config in chezmoi (`~/.config/motus/config.toml`)                                                                                  | todo                     |
 | 7 | Claude Code `PreToolUse` block hook; check whether #54196 is still open                                                                   | todo                     |
 | 8 | Smoke test in pi (below)                                                                                                                  | todo                     |
 | 9 | Roadmap: `pa`, `pass`, `bitwarden`, `1password`, `sops`, `secret-tool` and `security` adapters (D20)                                      | todo                     |

@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 
+import { stringify } from 'smol-toml'
+
 import { DEFAULT_PREFIXES, parseConfig, readConfig } from '../src/config.ts'
 
 describe('parseConfig', () => {
@@ -69,22 +71,22 @@ describe('parseConfig', () => {
 
 describe('readConfig', () => {
   test('parses a config file', async () => {
-    const path = join(await mkdtemp(join(tmpdir(), 'motus-')), 'config.json')
-    await writeFile(path, JSON.stringify({ blockCommands: ['pa'] }))
+    const path = join(await mkdtemp(join(tmpdir(), 'motus-')), 'config.toml')
+    await writeFile(path, stringify({ blockCommands: ['pa'] }))
     assert.deepEqual((await readConfig(path)).blockCommands, ['pa'])
   })
 
-  test('rejects invalid JSON without echoing the file contents', async () => {
-    const path = join(await mkdtemp(join(tmpdir(), 'motus-')), 'config.json')
-    await writeFile(path, '{"fixture-not-json-0001')
+  test('rejects invalid TOML without echoing the file contents', async () => {
+    const path = join(await mkdtemp(join(tmpdir(), 'motus-')), 'config.toml')
+    await writeFile(path, 'blockCommands = ["fixture-not-toml-0001')
     await assert.rejects(readConfig(path), (error: Error) => {
-      assert.match(error.message, /config\.json is not valid JSON/)
-      assert.doesNotMatch(error.message, /fixture-not-json-0001/)
+      assert.match(error.message, /config\.toml is not valid TOML/)
+      assert.doesNotMatch(error.message, /fixture-not-toml-0001/)
       return true
     })
   })
 
   test('rejects a missing file', async () => {
-    await assert.rejects(readConfig(join(tmpdir(), 'motus-missing', 'config.json')), /cannot read/)
+    await assert.rejects(readConfig(join(tmpdir(), 'motus-missing', 'config.toml')), /cannot read/)
   })
 })

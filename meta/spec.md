@@ -21,7 +21,7 @@ _Draft 2026-10-29 UTC, from grilling sessions. Terms are defined in `CONTEXT.md`
 | D8  | Block credential files by path; never parse them                                                                                                                                                                  | The agent never needs them. A leaked age master key exposes everything encrypted with it                                                                                                                                                |
 | D9  | Block secret-manager CLIs that print values (`pa show`, `gh auth token`, `op read`, …), configurable                                                                                                              | 759 pa entries can't be pre-loaded for exact-match redaction                                                                                                                                                                            |
 | D10 | Blocks can't be lifted from inside pi                                                                                                                                                                             | Safety decisions belong to the human, outside the agent                                                                                                                                                                                 |
-| D11 | One shared config file, `~/.config/motus/config.json`, and one npm package. The CC hook is a second `bin` (`motus-cc-hook`) importing the same blocklist core                                                     | One list to maintain, one blocklist implementation to test                                                                                                                                                                              |
+| D11 | One shared TOML config file, `~/.config/motus/config.toml`, and one npm package. The CC hook is a second `bin` (`motus-cc-hook`) importing the same blocklist core                                                | One list to maintain, one blocklist implementation to test                                                                                                                                                                              |
 | D12 | Build our own; borrow MIT code with credit                                                                                                                                                                        | See `research/oss-survey.md`: no fork base (the closest one has no public repo and redacts `0x` addresses)                                                                                                                              |
 | D13 | Own repo; publish to npm later                                                                                                                                                                                    | Testable, creditable, and the gap is real (fail-closed, command sources, web3-safe defaults)                                                                                                                                            |
 | D14 | Don't strip secrets from `process.env`. Child processes keep inheriting them                                                                                                                                      | Stripping breaks tools that need them (`forge` RPC URLs). Redaction covers accidental leaks; removing inheritance is the hostile-agent fix                                                                                              |
@@ -128,28 +128,28 @@ interface Secret {
 
 Adapters are built in; split into packages only if a third party wants one.
 
-## Config (`~/.config/motus/config.json`)
+## Config (`~/.config/motus/config.toml`)
 
-```json
-{
-  "sources": [
-    { "type": "env" },
-    { "type": "mise", "listFile": "~/.config/rotate-mise-secrets/files" }
-  ],
-  "prefixes": ["sk-ant-", "ghp_", "github_pat_", "AKIA", "xox[bp]-"],
-  "blockPaths": [
-    "~/.config/mise/age.txt",
-    "${PA_DIR:-~/.local/share/pa}/identities",
-    "~/.local/share/pa-machine/",
-    "..."
-  ],
-  "blockCommands": ["pa", "pam", "gh auth token", "op read"],
-  "degradedAllowTools": [],
-  "minValueLength": 8,
-  "claudeCode": {
-    "blockCommands": ["env", "printenv", "mise env", "cat .env*"]
-  }
-}
+```toml
+prefixes = ["sk-ant-", "ghp_", "github_pat_", "AKIA", "xox[bp]-"]
+blockPaths = [
+  "~/.config/mise/age.txt",
+  "${PA_DIR:-~/.local/share/pa}/identities",
+  "~/.local/share/pa-machine/",
+]
+blockCommands = ["pa", "pam", "gh auth token", "op read"]
+degradedAllowTools = []
+minValueLength = 8
+
+[[sources]]
+type = "env"
+
+[[sources]]
+type = "mise"
+listFile = "~/.config/rotate-mise-secrets/files"
+
+[claudeCode]
+blockCommands = ["env", "printenv", "mise env", "cat .env*"]
 ```
 
 - The pi extension reads everything except `claudeCode`.

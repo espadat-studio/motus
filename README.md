@@ -18,7 +18,7 @@ pi install npm:@espadat-studio/motus
 - First in `packages` of `~/.pi/agent/settings.json`: handlers run in load order, so an extension loaded earlier sees raw tool output and messages.
 - pi can't report handler order, so motus doesn't check either rule.
 
-Create `~/.config/motus/config.json` (see [`meta/spec.md`](meta/spec.md#config-configmotusconfigjson)). Without it every session starts degraded.
+Create `~/.config/motus/config.toml` (see [`meta/spec.md`](meta/spec.md#config-configmotusconfigtoml)). Without it every session starts degraded.
 
 ## Use
 

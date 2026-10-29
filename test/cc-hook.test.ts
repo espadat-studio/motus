@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
 
+import { stringify } from 'smol-toml'
+
 import { runHook } from '../src/cc-hook.ts'
 
 const BIN = join(import.meta.dirname, '../bin/motus-cc-hook.js')
@@ -13,10 +15,10 @@ const home = realpathSync(mkdtempSync(join(tmpdir(), 'motus-cc-')))
 after(() => rmSync(home, { recursive: true }))
 mkdirSync(join(home, '.config/motus'), { recursive: true })
 mkdirSync(join(home, '.config/mise'), { recursive: true })
-const configPath = join(home, '.config/motus/config.json')
+const configPath = join(home, '.config/motus/config.toml')
 writeFileSync(
   configPath,
-  JSON.stringify({
+  stringify({
     blockPaths: ['~/.config/mise/age.txt'],
     blockCommands: ['pa', 'gh auth token'],
     claudeCode: { blockCommands: ['env', 'printenv', 'mise env', 'cat .env*'] },
@@ -79,21 +81,21 @@ describe('runHook', () => {
   })
 
   test('denies on invalid config', async () => {
-    const invalid = join(home, 'invalid.json')
-    writeFileSync(invalid, JSON.stringify({ blockCommands: 'pa' }))
+    const invalid = join(home, 'invalid.toml')
+    writeFileSync(invalid, stringify({ blockCommands: 'pa' }))
     assert.match(denyReason(await runHook(toolUse('Bash', { command: 'ls' }), invalid, env)) ?? '', /blockCommands/)
   })
 
   test('denies on a missing config', async () => {
     assert.match(
-      denyReason(await runHook(toolUse('Bash', { command: 'ls' }), join(home, 'nope.json'), env)) ?? '',
+      denyReason(await runHook(toolUse('Bash', { command: 'ls' }), join(home, 'nope.toml'), env)) ?? '',
       /cannot read/,
     )
   })
 
   test('denies on an unresolvable blockPaths entry', async () => {
-    const unset = join(home, 'unset.json')
-    writeFileSync(unset, JSON.stringify({ blockPaths: ['$NOPE/x'] }))
+    const unset = join(home, 'unset.toml')
+    writeFileSync(unset, stringify({ blockPaths: ['$NOPE/x'] }))
     assert.match(denyReason(await runHook(toolUse('Read', { file_path: '/x' }), unset, env)) ?? '', /\$NOPE/)
   })
 
