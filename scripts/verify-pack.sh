@@ -14,7 +14,7 @@ npm install --silent "$work/$tarball"
 cat >load.mjs <<'JS'
 import { createJiti } from 'jiti'
 
-const entry = await createJiti(import.meta.url).import('@espadat-studio/motus/extensions/motus.ts', { default: true })
+const entry = await createJiti(import.meta.url).import('@espadat/motus/extensions/motus.ts', { default: true })
 if (typeof entry !== 'function') throw new Error('pi extension entry is not a function')
 JS
 node load.mjs
