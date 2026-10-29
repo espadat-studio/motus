@@ -1,14 +1,16 @@
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 
 import { parse } from 'smol-toml'
 
+import { expandPath } from './blocklist.ts'
 import type { SecretSource } from './sources.ts'
 import { commandSource } from './sources/command.ts'
 import { envSource } from './sources/env.ts'
 import { miseSource } from './sources/mise.ts'
 import { isOnePasswordRef, isSecretName, onePasswordSource } from './sources/onepassword.ts'
+import { paSource } from './sources/pa.ts'
 
 export interface ConfiguredSource {
   source: SecretSource
@@ -33,6 +35,7 @@ export const DEFAULT_PREFIXES = ['sk-ant-', 'ghp_', 'github_pat_', 'AKIA', 'xox[
 
 export const DEFAULT_TIMEOUT_MS = 10_000
 export const DEFAULT_MIN_VALUE_LENGTH = 8
+const DEFAULT_PA_DIR = '${PA_DIR:-~/.local/share/pa}'
 const TOP_LEVEL_KEYS = [
   'sources',
   'prefixes',
@@ -45,7 +48,10 @@ const TOP_LEVEL_KEYS = [
 const COMMON_SOURCE_KEYS = ['type', 'id', 'required', 'timeoutMs']
 const ADAPTERS: Record<
   string,
-  { keys: string[]; create(id: string, options: Options, at: string, env: NodeJS.ProcessEnv): SecretSource }
+  {
+    keys: string[]
+    create(id: string, options: Options, at: string, env: NodeJS.ProcessEnv, minValueLength: number): SecretSource
+  }
 > = {
   env: { keys: [], create: (id, _options, _at, env) => envSource(env, id) },
   command: {
@@ -76,6 +82,31 @@ const ADAPTERS: Record<
       return onePasswordSource(id, refMap as Record<string, string>, fromEnv, env)
     },
   },
+  pa: {
+    keys: ['dir', 'entries', 'whole'],
+    create: (id, { dir, entries, whole }, at, env, minValueLength) => {
+      if ((entries === undefined) === (whole === undefined))
+        throw new Error(`${at} needs exactly one of entries or whole`)
+      if (whole !== undefined && whole !== true) throw new Error(`${at}.whole must be true`)
+      const names = entries === undefined ? undefined : asStrings(entries, `${at}.entries`)
+      if (names?.length === 0 || names?.includes(''))
+        throw new Error(`${at}.entries must be a non-empty array of non-empty strings`)
+      if (dir !== undefined && (typeof dir !== 'string' || dir === ''))
+        throw new Error(`${at}.dir must be a non-empty string`)
+      return paSource(id, {
+        dir: resolvePaDir(dir ?? DEFAULT_PA_DIR, at, env),
+        minValueLength,
+        env,
+        ...(names && { entries: names }),
+      })
+    },
+  },
+}
+
+function resolvePaDir(dir: string, at: string, env: NodeJS.ProcessEnv): string {
+  const expanded = expandPath(dir, env, `${at}.dir`)
+  if (!isAbsolute(expanded)) throw new Error(`${at}.dir is not absolute after expansion`)
+  return expanded
 }
 
 export function defaultEnvSource(env: NodeJS.ProcessEnv): ConfiguredSource {
@@ -100,20 +131,21 @@ export function parseConfig(raw: unknown, env: NodeJS.ProcessEnv = process.env):
   rejectUnknownKeys(config, TOP_LEVEL_KEYS, 'config')
   const claudeCode = asObject(config['claudeCode'] ?? {}, 'claudeCode')
   rejectUnknownKeys(claudeCode, ['blockCommands'], 'claudeCode')
+  const minValueLength = asPositiveInteger(config['minValueLength'] ?? DEFAULT_MIN_VALUE_LENGTH, 'minValueLength')
   return {
-    sources: parseSources(config['sources'] ?? [], env),
+    sources: parseSources(config['sources'] ?? [], env, minValueLength),
     prefixes: asStrings(config['prefixes'] ?? DEFAULT_PREFIXES, 'prefixes'),
     blockPaths: asStrings(config['blockPaths'] ?? [], 'blockPaths'),
     blockCommands: asStrings(config['blockCommands'] ?? [], 'blockCommands'),
     degradedAllowTools: asStrings(config['degradedAllowTools'] ?? [], 'degradedAllowTools'),
-    minValueLength: asPositiveInteger(config['minValueLength'] ?? DEFAULT_MIN_VALUE_LENGTH, 'minValueLength'),
+    minValueLength,
     claudeCode: { blockCommands: asStrings(claudeCode['blockCommands'] ?? [], 'claudeCode.blockCommands') },
   }
 }
 
-function parseSources(raw: unknown, env: NodeJS.ProcessEnv): ConfiguredSource[] {
+function parseSources(raw: unknown, env: NodeJS.ProcessEnv, minValueLength: number): ConfiguredSource[] {
   if (!Array.isArray(raw)) throw new Error('sources must be an array')
-  const sources = raw.map((entry, index) => parseSource(entry, `sources[${index}]`, env))
+  const sources = raw.map((entry, index) => parseSource(entry, `sources[${index}]`, env, minValueLength))
   if (!(raw as Options[]).some(({ type }) => type === 'env')) sources.unshift(defaultEnvSource(env))
   const ids = sources.map(({ source }) => source.id)
   const duplicate = ids.find((id, index) => ids.indexOf(id) !== index)
@@ -121,7 +153,7 @@ function parseSources(raw: unknown, env: NodeJS.ProcessEnv): ConfiguredSource[] 
   return sources
 }
 
-function parseSource(raw: unknown, at: string, env: NodeJS.ProcessEnv): ConfiguredSource {
+function parseSource(raw: unknown, at: string, env: NodeJS.ProcessEnv, minValueLength: number): ConfiguredSource {
   const options = asObject(raw, at)
   const { type, id = type, required = true, timeoutMs = DEFAULT_TIMEOUT_MS } = options
   const adapter = typeof type === 'string' ? ADAPTERS[type] : undefined
@@ -130,7 +162,7 @@ function parseSource(raw: unknown, at: string, env: NodeJS.ProcessEnv): Configur
   if (typeof id !== 'string' || id === '') throw new Error(`${at}.id must be a non-empty string`)
   if (typeof required !== 'boolean') throw new Error(`${at}.required must be a boolean`)
   return {
-    source: adapter.create(id, options, at, env),
+    source: adapter.create(id, options, at, env, minValueLength),
     required,
     timeoutMs: asPositiveInteger(timeoutMs, `${at}.timeoutMs`),
   }

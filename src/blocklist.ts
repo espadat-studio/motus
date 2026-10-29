@@ -28,7 +28,7 @@ export function checkCommand(command: string, blockCommands: readonly string[]):
 
 export function resolveBlockPaths(entries: readonly string[], env: NodeJS.ProcessEnv): string[] {
   return entries.map((entry) => {
-    const expanded = expandPath(entry, env)
+    const expanded = expandPath(entry, env, 'blockPaths entry')
     if (!isAbsolute(expanded)) throw new Error(`blockPaths entry "${entry}" is not absolute after expansion`)
     return resolveRealpath(resolve(expanded))
   })
@@ -192,7 +192,7 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-function expandPath(entry: string, env: NodeJS.ProcessEnv): string {
+export function expandPath(entry: string, env: NodeJS.ProcessEnv, at: string): string {
   const home = env['HOME']
   if (home === undefined) throw new Error('HOME is not set')
   return entry.replace(TILDE, home).replace(
@@ -201,7 +201,7 @@ function expandPath(entry: string, env: NodeJS.ProcessEnv): string {
       const name: string = braced ?? bare
       const value = env[name]
       if (fallback !== undefined && !value) return fallback.replace(TILDE, home)
-      if (value === undefined) throw new Error(`blockPaths entry "${entry}": $${name} is not set`)
+      if (value === undefined) throw new Error(`${at} "${entry}": $${name} is not set`)
       return value
     },
   )
