@@ -1,0 +1,17 @@
+{
+  "name": "pi-motus-docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.42.0",
+    "@espadat/docs-theme": "github:espadat-studio/docs-theme#v0.4.0",
+    "astro": "^7.3.2",
+    "starlight-llms-txt": "^0.12.0"
+  }
+}
