@@ -12,6 +12,10 @@ _Avoid_: credential (reserved for credential files), key
 Somewhere secrets are loaded from at session start (environment, a command, mise, a password manager).
 _Avoid_: provider, backend
 
+**Store**:
+A password manager's collection of entries, unlocked by one identity (a YubiKey, a TPM). A source reads one store.
+_Avoid_: vault (1Password's own word), repo
+
 **Required source**:
 A source whose failure, in a repo it applies to, puts the session in the degraded state.
 
