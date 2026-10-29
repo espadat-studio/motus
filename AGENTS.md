@@ -1,4 +1,4 @@
-# pi-motus
+# motus
 
 ## Tooling
 
@@ -18,7 +18,7 @@ Read `meta/spec.md` (decisions D1-D13, architecture, failure modes) before chang
 
 ### Issue tracker
 
-GitHub Issues on `espadat-studio/pi-motus`, via the `gh` CLI. See `meta/agents/issue-tracker.md`.
+GitHub Issues on `espadat-studio/motus`, via the `gh` CLI. See `meta/agents/issue-tracker.md`.
 
 ### Triage labels
 

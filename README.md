@@ -1,4 +1,4 @@
-# pi-motus
+# motus
 
 > _Motus et bouche cousue_: "not a word, lips sealed".
 

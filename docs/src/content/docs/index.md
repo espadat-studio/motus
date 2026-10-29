@@ -1,11 +1,11 @@
 ---
-title: pi-motus
+title: motus
 description: "Keep secrets out of the model and pi's session files: exact-value redaction from pluggable secret sources, credential path and command blocks, fail-closed."
 ---
 
 > _Motus et bouche cousue_: "not a word, lips sealed".
 
-A well-meaning agent prints secrets all the time: `env`, `cat .env`, `forge -vvvv`, `mise env`, debug logs. Each one sends the values to the model provider and into pi's session files, where memory tools copy them further. pi-motus redacts known secret values before they leave the tool result, and blocks the commands and files that print them.
+A well-meaning agent prints secrets all the time: `env`, `cat .env`, `forge -vvvv`, `mise env`, debug logs. Each one sends the values to the model provider and into pi's session files, where memory tools copy them further. motus redacts known secret values before they leave the tool result, and blocks the commands and files that print them.
 
 Status: **in development**. Nothing is published yet.
 
