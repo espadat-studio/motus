@@ -50,6 +50,8 @@ describe('runHook', () => {
     ['Bash', { command: "bash -c 'gh auth token'" }],
     ['Bash', { command: 'cat ~/.config/mise/age.txt' }],
     ['Bash', { command: 'cat $HOME/.config/mise/age.txt' }],
+    ['Bash', { command: "cat <<'EOF' | bash\npa show x\nEOF" }],
+    ['Bash', { command: "cat <<'EOF'\nunterminated" }],
     ['Read', { file_path: join(home, '.config/mise/age.txt') }],
     ['Read', { file_path: '.config/mise/age.txt' }],
   ]
@@ -63,6 +65,7 @@ describe('runHook', () => {
     ['Bash', { command: 'npm run paint' }],
     ['Bash', { command: 'mise run env-check' }],
     ['Bash', { command: 'cat ~/.config/mise/config.toml' }],
+    ['Bash', { command: 'gh issue comment 1 --body "$(cat <<\'EOF\'\nrun `env`, not $(pa show x)\nEOF\n)"' }],
     ['Read', { file_path: join(home, '.config/mise/config.toml') }],
     ['Grep', { pattern: 'x' }],
     ['Edit', { file_path: join(home, 'a.ts'), old_string: 'env', new_string: 'printenv' }],

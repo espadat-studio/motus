@@ -77,6 +77,52 @@ describe('checkCommand', () => {
   })
 })
 
+describe('checkCommand heredocs', () => {
+  const HEREDOC_COMMANDS = ['env', 'pam']
+  const body = '`env` and $(pam s x)\n'
+  const tricky = "it's `env`, $(pam s x) (sic\n"
+
+  const allowed = [
+    `cat <<'EOF'\n${body}EOF`,
+    `cat <<"EOF"\n${body}EOF\necho done`,
+    `cat <<\\EOF\n${body}EOF`,
+    `cat <<-'EOF'\n${body}\tEOF`,
+    `gh issue comment 1 --body "$(cat <<'EOF'\n${body}EOF\n)"`,
+    `gh issue comment 1 --body "$(cat <<'EOF'\n${tricky}EOF\n)" && echo ok`,
+    `cat <<'A' <<'B'\n${body}A\n${body}B`,
+    'cat <<EOF\nplain text\nEOF',
+    'cat <<<"$HOME"',
+  ]
+  for (const command of allowed) {
+    test(`allows ${JSON.stringify(command)}`, () => {
+      assert.equal(checkCommand(command, HEREDOC_COMMANDS), undefined)
+    })
+  }
+
+  const blocked = [
+    'cat <<EOF\n`env`\nEOF',
+    'cat <<-EOF\n$(pam s x)\n\tEOF',
+    'echo "$(cat <<EOF\n$(pam s x)\nEOF\n)"',
+    "cat <<'EOF' | sh\npam s x\nEOF",
+    "bash <<'EOF'\npam s x\nEOF",
+    "sudo sh -s <<'EOF'\npam s x\nEOF",
+    "cat <<'A' <<B\nsafe\nA\n`env`\nB",
+    "cat <<'EOF'\nsafe\nEOF\nenv",
+    `echo "$(cat <<'EOF'\n${tricky}EOF\n)"; env`,
+    "cat <<'EOF'\npam s x",
+    'echo "$(cat <<EOF\nsafe\n)"',
+  ]
+  for (const command of blocked) {
+    test(`blocks ${JSON.stringify(command)}`, () => {
+      assert.ok(checkCommand(command, HEREDOC_COMMANDS))
+    })
+  }
+
+  test('reason names the unterminated delimiter', () => {
+    assert.match(checkCommand("cat <<'EOF'\nx", HEREDOC_COMMANDS) ?? '', /unterminated heredoc "EOF"/)
+  })
+})
+
 describe('paths', () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'motus-')))
   mkdirSync(join(home, '.config/mise'), { recursive: true })

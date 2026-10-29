@@ -18,10 +18,23 @@ const PLACEHOLDER = /\[REDACTED:([^\]\s]+)\]/g
 const TILDE = /^~(?=\/|$)/
 const PATH_CONTINUES = '(?![\\w.-])'
 
+interface Heredoc {
+  delimiter: string
+  isQuoted: boolean
+  stripsTabs: boolean
+}
+
+class ParseError extends Error {}
+
 export function checkCommand(command: string, blockCommands: readonly string[]): string | undefined {
-  for (const words of listSimpleCommands(command)) {
-    const entry = blockCommands.find((candidate) => matchesEntry(words, candidate))
-    if (entry !== undefined) return `command matches blockCommands entry "${entry}"`
+  try {
+    for (const words of listSimpleCommands(command)) {
+      const entry = blockCommands.find((candidate) => matchesEntry(words, candidate))
+      if (entry !== undefined) return `command matches blockCommands entry "${entry}"`
+    }
+  } catch (error) {
+    if (error instanceof ParseError) return `cannot parse command: ${error.message}`
+    throw error
   }
   return undefined
 }
@@ -97,6 +110,8 @@ function splitCommands(source: string): string[][] {
   const commands: string[][] = []
   let words: string[] = []
   let word: string | undefined
+  let heredocs: Heredoc[] = []
+  let lineStart = 0
   const endWord = (): void => {
     if (word !== undefined) words.push(word)
     word = undefined
@@ -117,7 +132,26 @@ function splitCommands(source: string): string[][] {
     const substitution = findSubstitution(source, index)
     if (substitution !== undefined)
       index = substitute(substitution)
-    else if (char === '\\') {
+    else if (source.startsWith('<<<', index)) {
+      word = (word ?? '') + '<<<'
+      index += 2
+    } else if (source.startsWith('<<', index)) {
+      endWord()
+      const [heredoc, end] = readHeredoc(source, index)
+      heredocs.push(heredoc)
+      index = end - 1
+    } else if (char === '\n' && heredocs.length > 0) {
+      endCommand()
+      const [bodies, end] = readBodies(source, index, heredocs)
+      const isFedToShell = commands.slice(lineStart).some(readsScriptFromStdin)
+      for (const [body, { isQuoted }] of bodies) {
+        if (isFedToShell) commands.push(...splitCommands(body))
+        else if (!isQuoted) commands.push(...listBodySubstitutions(body))
+      }
+      heredocs = []
+      lineStart = commands.length
+      index = end
+    } else if (char === '\\') {
       word = (word ?? '') + (source[index + 1] ?? '')
       index++
     } else if (char === "'") {
@@ -139,10 +173,12 @@ function splitCommands(source: string): string[][] {
       }
     } else if (char === ' ' || char === '\t')
       endWord()
-    else if (SEPARATORS.has(char))
+    else if (SEPARATORS.has(char)) {
       endCommand()
-    else
+      if (char === '\n') lineStart = commands.length
+    } else {
       word = (word ?? '') + char
+    }
   }
   endCommand()
   return commands
@@ -161,14 +197,86 @@ function findClosing(source: string, char: string, from: number): number {
 
 function findClosingParen(source: string, from: number): number {
   let depth = 1
+  let heredocs: Heredoc[] = []
   for (let index = from; index < source.length; index++) {
     const char = source[index]
     if (char === '\\') index++
     else if (char === "'" || char === '"') index = findClosing(source, char, index + 1)
-    else if (char === '(') depth++
+    else if (source.startsWith('<<<', index)) index += 2
+    else if (source.startsWith('<<', index)) {
+      const [heredoc, end] = readHeredoc(source, index)
+      heredocs.push(heredoc)
+      index = end - 1
+    } else if (char === '\n' && heredocs.length > 0) {
+      index = readBodies(source, index, heredocs)[1]
+      heredocs = []
+    } else if (char === '(') depth++
     else if (char === ')' && --depth === 0) return index
   }
   return source.length
+}
+
+function readHeredoc(source: string, from: number): [Heredoc, number] {
+  let index = from + 2
+  const stripsTabs = source[index] === '-'
+  if (stripsTabs) index++
+  while (source[index] === ' ' || source[index] === '\t') index++
+  let delimiter = ''
+  let isQuoted = false
+  for (; index < source.length && !/[\s;&|()<>]/.test(source[index] ?? ''); index++) {
+    const char = source[index] ?? ''
+    if (char === "'" || char === '"') {
+      const end = findClosing(source, char, index + 1)
+      delimiter += source.slice(index + 1, end)
+      isQuoted = true
+      index = end
+    } else if (char === '\\') {
+      delimiter += source[index + 1] ?? ''
+      isQuoted = true
+      index++
+    } else {
+      delimiter += char
+    }
+  }
+  if (delimiter === '' && !isQuoted) throw new ParseError('heredoc has no delimiter')
+  return [{ delimiter, isQuoted, stripsTabs }, index]
+}
+
+function readBodies(source: string, newline: number, heredocs: Heredoc[]): [Array<[string, Heredoc]>, number] {
+  const bodies: Array<[string, Heredoc]> = []
+  let start = newline + 1
+  for (const heredoc of heredocs) {
+    for (let lineStart = start;;) {
+      if (lineStart > source.length) throw new ParseError(`unterminated heredoc "${heredoc.delimiter}"`)
+      const lineEnd = findClosing(source, '\n', lineStart)
+      const line = source.slice(lineStart, lineEnd)
+      if ((heredoc.stripsTabs ? line.replace(/^\t+/, '') : line) === heredoc.delimiter) {
+        bodies.push([source.slice(start, lineStart), heredoc])
+        start = lineEnd + 1
+        break
+      }
+      lineStart = lineEnd + 1
+    }
+  }
+  return [bodies, start - 1]
+}
+
+function listBodySubstitutions(body: string): string[][] {
+  const commands: string[][] = []
+  for (let index = 0; index < body.length; index++) {
+    const substitution = findSubstitution(body, index)
+    if (body[index] === '\\') index++
+    else if (substitution !== undefined) {
+      commands.push(...splitCommands(body.slice(...substitution)))
+      index = substitution[1]
+    }
+  }
+  return commands
+}
+
+function readsScriptFromStdin(words: string[]): boolean {
+  const [name, ...args] = skipPrefixes(words)
+  return name !== undefined && SHELLS.has(basename(name)) && !args.some((arg) => SCRIPT_FLAG.test(arg))
 }
 
 function matchesEntry(words: readonly string[], entry: string): boolean {
