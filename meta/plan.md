@@ -22,7 +22,7 @@ Unit tests (fixtures only, never real values):
 - Multi-line and quote-containing values redacted inside a nested provider payload (string walk, not serialized JSON).
 - Web3 negatives: tx hashes, addresses and storage slots pass through untouched.
 - Vendor prefixes.
-- Blocklist: `pa show x`, `echo $(pa s x)`, `sudo pa show x`, `bash -c 'pa show x'`, `cat ~/.config/mise/age.txt`, `cat $HOME/.config/mise/age.txt`, `read`/`grep` tools on blocked paths and paths under blocked dirs; the negative `npm run paint` is not blocked.
+- Blocklist: `pa show x`, `echo $(pa s x)`, `sudo pa show x`, `bash -c 'pa show x'`, `PA_DIR=/x pa show y`, `cat ~/.config/mise/age.txt`, `cat $HOME/.config/mise/age.txt`, `read`/`grep` tools on blocked paths and paths under blocked dirs; the negative `npm run paint` is not blocked.
 - Placeholder write-back: `edit`/`write`/`bash` input with `[REDACTED:<loaded name>]` blocked; unloaded names pass.
 - Adapter failure: throws → degraded only when `appliesTo` is true; degraded blocks every non-allowlisted tool.
 - `structuredContent` and `details` (edit `diff`/`patch`) are redacted, not dropped.
