@@ -1,0 +1,149 @@
+# pi secret redaction — OSS survey (build vs fork)
+
+_Generated: 2026-10-29 UTC. Primary sources only: npm registry (`registry.npmjs.org`, `npm view <pkg> time --json`), npm tarballs unpacked with `npm pack` into `/tmp/redact-research/<pkg>/package/` (paths below are relative to that dir; ephemeral, re-create with `npm pack <pkg>@<version>`), GitHub REST API via `gh api repos/<owner>/<repo>` (visibility, license, push date, file tree), pi 1.4.0 docs (`~/.local/share/mise/installs/pi/1.4.0/pi/docs/extensions.md`). READMEs used only for claims also confirmed in code, unless marked "README"._
+
+## TL;DR
+
+**No candidate fits as-is. Recommendation: (3) build our own (~500 LOC, estimate), borrowing MIT code with attribution from `@sidshaytay/pi-secret-safe`, `pi-redact` (BubbatheVTOG) and `@kickythrust/pi-fnox`.**
+
+- 49 redaction/guard-related `pi-package`s found; 21 tarballs inspected in code; 4 harness-agnostic tools checked.
+- **None** loads secrets from a configurable command (R1b) **and** fails closed **and** avoids generic keyword rules. Only `pi-fnox` runs a command (hard-coded `fnox export`), and it fails open.
+- Closest overall: `@sidshaytay/pi-secret-safe` 0.2.2. Source is in the npm tarball under MIT, but **the declared repo 404s**. Author `SidShaytay` has 37 public repos, none named `pi-extensions` (`gh api users/SidShaytay/repos`). So there are no tests, no history and nowhere to send PRs.
+- pi-secret-safe also **fails R2 for web3**: tested here, `const tokenAddress = "0x6B17…1d0F"` → redacted as `SECRET_QUOTED_SECRET_ASSIGNMENT`. Captured values ≥8 chars then become exact-value rules, so that public address is hidden for the rest of the session (`core/redactor.ts` `capture()`). Built-in rules cannot be turned off; config only adds patterns (`core/config.ts` `refreshPatterns`).
+
+## Requirements (from task)
+
+| # | Requirement |
+| --- | --- |
+| R1 | Exact-value redaction: (a) `process.env` by name heuristic, (b) extensible source, e.g. a command returning `NAME→value` JSON (mise age-decrypted configs, many repos) |
+| R2 | Vendor-prefix rules (`sk-ant-`, `ghp_`, `github_pat_`, `AKIA`, `xox[bp]-`); **no** generic 64-hex/entropy rules by default |
+| R3 | Redact `tool_result` incl. `structuredContent` (clean JSONL on disk) + `before_provider_request` backstop |
+| R4 | `tool_call` blocking of configurable paths (read + bash mentions) and commands (e.g. `pa`) |
+| R5 | Fail-closed option when secret loading fails |
+| R6 | Placeholder like `[REDACTED:NAME]` |
+| R7 | Quality: tests, LOC, deps, activity, license, public repo |
+
+pi API fact behind R3: "`tool_result` handlers that redact `content` should also replace `structuredContent`; replacing only `content` drops it" (`docs/extensions.md` L261). Dropping it does not leak, but it breaks codemode callers.
+
+## Candidates: provenance and quality (R7)
+
+LOC = shipped `.ts`/`.js` source lines, excluding `.d.ts`. Tests = test files in the **repo tree** for that package (tarballs mostly exclude tests).
+
+| Package | Ver / last publish | Repo (resolves?) | License (pkg / file / repo) | Src LOC | Tests | Runtime deps | Repo last push / contributors |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `@sidshaytay/pi-secret-safe` | 0.2.2 / 2026-10-27 | github.com/SidShaytay/pi-extensions **404** | MIT / LICENSE in tarball / n/a | 1,980 TS | **unverifiable** (0 in tarball) | none | n/a |
+| `pi-redact` (BubbatheVTOG) | 0.1.0 / 2026-09-20 (1 version) | ✅ public | MIT / LICENSE / MIT | 621 TS | 7 files | `safe-regex2` | 2026-09-22 / 1 |
+| `@arvoretech/pi-secret-firewall` | 0.4.0 / 2026-07-22 | ✅ public (monorepo `packages/secret-firewall`) | MIT / **no LICENSE file** / none | 445 JS (dist only) | 1 (`test/smoke.test.ts`) | none | 2026-10-22 / 7 |
+| `pi-redact-all` | 0.2.1 / 2026-08-31 | ✅ public | MIT / **no LICENSE file** / none | 1,682 JS (dist only) | 12 | none | 2026-09-20 / 3 |
+| `@nicknisi/pi-cloak` | 0.2.0 / 2026-10-22 | ✅ public (monorepo `packages/cloak`) | MIT / LICENSE / MIT | 464 TS | 1 (`index.test.ts`) | none | 2026-10-26 / 9 |
+| `pi-sensitive-guard` | 0.5.0 / 2026-07-03 | ✅ public | MIT / LICENSE / MIT | ~6,800 TS | 15 | `@aliou/sh` | 2026-07-03 / 1 |
+| `pi-secret` (kslamph) | 0.5.0 / 2026-10-10 | ✅ public | MIT / LICENSE / MIT | 6,207 TS | 37 | none | 2026-10-10 / 1 |
+| `@k3_2o/pi-secrets` | 0.4.0 / 2026-10-25 | ✅ public | MIT / LICENSE / MIT | 3,968 TS | 9 | `yaml` | 2026-10-25 / 1 (10 commits) |
+| `@vieko/pi-redact` | 0.1.2 / 2026-10-14 | ✅ public | MIT / LICENSE+NOTICE / MIT | 2,199 TS | 6 | none | 2026-10-16 / 1 |
+| `@buyong/pi-redact` | 0.2.1 / 2026-10-29 | ✅ public (monorepo) | **Apache-2.0** / LICENSE Apache / repo MIT (mismatch) | 3,040 TS + `@buyong/redact` | 20 | `@buyong/redact`, `effect` | 2026-10-29 / 30 (monorepo) |
+| `@kickythrust/pi-fnox` | 0.1.0 / 2026-07-03 (1 version) | ✅ public | MIT / LICENSE / MIT | 227 TS | 0 | none | 2026-08-14 / 1 (1 commit) |
+| `@uiyzzi/pi-shroud` (fork of arvoretech) | 0.2.1 / 2026-07-30 | ✅ public | MIT / no LICENSE / none | 1,141 | 6 | none | 2026-07-31 / 1 |
+| `@spences10/pi-redact` | 0.0.15 / 2026-08-23 | ✅ public (my-pi monorepo) | MIT / LICENSE / MIT | 294 | 1 | none | 2026-10-29 / 4 |
+| `pi-secret-mask` | 0.1.5 / 2026-10-24 | ✅ public | MIT / no LICENSE / none | 1,293 | 2 | none | 2026-10-24 / 2 |
+| `pi-redactor` | 1.0.1 / 2026-03-14 | ✅ public | MIT / LICENSE / MIT | 1,462 | 5 | none | 2026-10-12 / 1 |
+| `@iurysza/pi-secret-env` | 0.1.0 / 2026-07-24 | ✅ public (monorepo) | MIT / LICENSE / MIT | 153 | 1 | none | 2026-10-25 / 11 |
+| `@normful/pi-stop-secrets-leaks` | 0.3.0 / 2026-10-01 | ✅ public (monorepo) | MIT / LICENSE / MIT | 888 | 8 | none (shells out to `betterleaks`) | 2026-10-26 / 4 |
+| `@sevten/pi-data-masking` | 0.10.1 / 2026-10-24 | ✅ public | MIT / LICENSE / MIT | 16,436 | 34 | none | 2026-10-24 / 5 |
+| `pi-sensitive-guard`-style blockers (`pi-protected-paths`, `pi-defender`, `@raquezha/noleaks`) | — | noleaks has **no repo** field | MIT | — | — | — | not inspected in depth (blocking only, no value redaction) |
+
+Sources: registry `time` + `dist-tags`; `gh api repos/<slug>` (`visibility`, `license.spdx_id`, `pushed_at`); `gh api repos/<slug>/git/trees/<branch>?recursive=1`; `gh api repos/<slug>/contributors`.
+
+## Fit against R1–R6
+
+✅ meets · ◐ partial · ❌ no
+
+| Package | R1a env | R1b ext. source | R2 vendor, no generic | R3 tool_result + structured + provider backstop | R4 configurable path/cmd block | R5 fail-closed | R6 `[REDACTED:NAME]` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `@sidshaytay/pi-secret-safe` | ✅ | ❌ (env + dotenv only) | ❌ keyword-assignment rules + `sk-`, `at_…`, Bearer, JWT; not disableable | ◐ content+details+`message_end`+`before_provider_request`; **drops** `structuredContent` | ◐ `blockPaths`, `extraBlockCommands`, **strict mode only** | ❌ | ❌ `«Redacted — read as environment variable $NAME via script»` |
+| `pi-redact` (Bubba) | ◐ env **names listed** in config | ❌ | ✅ 6 conservative built-ins, `builtins:false` toggle | ❌ provider request only; JSONL stays raw | ❌ | ✅ | ❌ `*****` |
+| `@arvoretech/pi-secret-firewall` | ✅ | ❌ | ❌ (`sk-…`, JWT, auto-capture) | ◐ `tool_result` (content) + `context`; no `message_end`/provider hook | ❌ | ❌ | ❌ `«SECRET NAME redacted — …»` |
+| `pi-redact-all` | ❌ | ❌ | ❌ Shannon-entropy layer on by default (`dist/config.js` L17 `entropy: true`) | ◐ tool_result only | ◐ read/bash block on built-in sensitive-path list when `blockMode` on (`dist/hooks/tool-call.js`); paths not user-extensible beyond whitelist | ❌ | ✅ `[REDACTED:<type>]` (type, not name) |
+| `@nicknisi/pi-cloak` | ❌ | ❌ | n/a (user regex per file glob) | ◐ `read`/`bash`/`grep` results only | ❌ | ✅ on bad config (withholds output) | ❌ mask chars |
+| `pi-sensitive-guard` | ❌ | ❌ | ❌ entropy heuristic in read redactor (`src/read-redactor.ts` L194–205) | ◐ | ✅ path block (built-in list) | ❌ | ❌ `[REDACTED <label>]` |
+| `pi-secret` (kslamph) | ❌ user-entered vault | ❌ | ◐ | ✅ provider + tool_result | ◐ | ❌ | ❌ `{{sec:NAME}}` |
+| `@k3_2o/pi-secrets` | ✅ (`src/secrets/index.ts` L179–206) | ◐ static `secrets.yml` | ✅ "No generic keyword/entropy rules" (`src/secrets/patterns.ts` L18); auto-capture of key-named assignments remains | ✅ content + `structuredContent` + `message_end` + `context` | ❌ (`tool_call` only de-obfuscates args) | ❌ | ❌ `$$NAME_HMAC$$` (reversible) |
+| `@vieko/pi-redact` | ❌ | ❌ | ❌ vendored entropy detector (`src/detect.ts` L297, L628) | ✅ content+structured+details+`message_end` | ❌ | ◐ "scan failure withholds the result" (README) | ❌ `[REDACTED-SECRET-<hex8>]` |
+| `@buyong/pi-redact` | ❌ | ❌ | ◐ assignment field rules | ✅ incl. structured + provider + compaction | ◐ write guard only | ❌ | ❌ `{{REDACTED}}` |
+| `@kickythrust/pi-fnox` | ❌ | ◐ hard-coded `fnox export -f json` (`extensions/index.ts` L35–80) | ✅ (no patterns at all) | ❌ text content only | ❌ | ❌ resolves `[]` on any error | ✅ `[REDACTED:${name}]` |
+| `@iurysza/pi-secret-env` | ◐ one env file | ❌ | ✅ | ◐ | ◐ env-dump + secrets-file block | ❌ "missing file changes nothing" (README) | ❌ `[REDACTED]` |
+
+## Notes per candidate
+
+- **`@sidshaytay/pi-secret-safe`**: the most complete hook coverage. It hooks `input`, `context`, `before_provider_request`, `tool_result`, `message_end`, `tool_call`, `user_bash` (`extensions/index.ts`).
+  - `CREDITS.md` says it adapts MIT code from `kirang89/pi-sentry`, `emanuelcasco/pi-mono-extensions`, `spences10/my-pi` and `arvoreeducacao/arvore-pi-extensions`. The last ships no LICENSE file, so there is no copyright line.
+  - The tarball LICENSE is MIT, "Copyright (c) 2025 Sid Shaytay". Source is available as readable TS, so forking is legally fine. No upstream exists.
+  - Downsides:
+    - `exportToShell: true` by default writes dotenv secrets into pi's `process.env` (`syncExports`).
+    - `/secret-safe off` exists.
+    - `loadConfig` "never throws" and discovery is "best-effort" (`core/config.ts`, `core/discovery.ts`).
+    - The `tool_result` return omits `structuredContent` (`index.ts`, the `tool_result` handler).
+  - Worth borrowing:
+    - `guards/commands.ts`: path-token extraction from bash, plus a dump-command regex (`env|printenv|set|export -p|gh auth token|pass show`).
+    - `core/redactor.ts`: longest-value-first exact replacement, with fresh `RegExp` per call.
+    - `guards/message.ts`: walks message fields.
+    - `guards/continuation.ts`: chunked PEM reads.
+- **`pi-redact` (BubbatheVTOG)**: the only clean fail-closed design. If config load fails or a listed env var is unset or too short, `before_provider_request` returns `{}`, an empty payload (`src/index.ts`). It validates user regex with `safe-regex2`. It explicitly leaves session files raw (README "Security model"), so it is a backstop only. Sibling `pi-jev-redact` is the same author's larger variant.
+- **`@k3_2o/pi-secrets`**: the best R2 philosophy and R3 coverage. Its design differs from ours:
+  - Values are reversible HMAC placeholders, and `tool_call` restores real values into args (`index.ts` L160–168).
+  - It never blocks.
+  - It is off by default (`secrets.enabled`).
+  - Its bare-hex values count as non-secret for auto-capture (`src/secrets/value-gate.ts` L72). Good for tx hashes, but an unregistered 64-hex private key stays raw.
+  - Single maintainer, 10 commits, repo created 2026-10-10.
+- **`@kickythrust/pi-fnox`**: 227 LOC. It is the shape we want for R1b: spawn a command, parse JSON `{secrets:{NAME:value}}`, scrub with `[REDACTED:NAME]`, longest value first.
+  - Fails open (`resolve([])` on spawn error, non-zero exit or parse error).
+  - Loads async at extension init, so there is a race before the first tool result.
+  - Imports the old `@mariozechner/pi-coding-agent`.
+  - Overrides the built-in `bash` tool.
+- **`@buyong/pi-redact`**: covers `structuredContent`, compaction and branch summaries. But `/redact-analytics` stores **original secret values** in `~/.pi/agent/pi-redact/analytics.sqlite` for up to 30 days (README L112–116). That disqualifies it for us. Package says Apache-2.0 while the repo says MIT.
+- **`pi-redact-all`**, **`@vieko/pi-redact`**, **`pi-sensitive-guard`**: entropy-based detection is on by default, which is wrong for web3 repos (R2).
+- **`@arvoretech/pi-secret-firewall`** and its fork **`@uiyzzi/pi-shroud`**: ancestors of pi-secret-safe's env model. Neither has a LICENSE file (MIT declared only in `package.json`).
+
+## Harness-agnostic tools
+
+| Tool | Lang / license | Repo state | Model | Fit |
+| --- | --- | --- | --- | --- |
+| `svn-arv/redacted` | **Rust** (not Go) / MIT | public, push 2026-10-20, 0★ | Claude Code PostToolUse hook `redacted scrub`; marker keeps last 4 chars `[REDACTED:name ...abcd]`; `redacted init` learns names | Leaks 4 chars; CC-only wiring |
+| `SilentAutomaton/redact-hook` | Python / MIT | public, push 2026-10-08, 0★, 0 test files | one-file regex PostToolUse hook; `secret_file` rule = exact values from `redact.secrets`; `[REDACTED:<rule>]` | Exact-value file source is close to R1b; CC-only; no tests |
+| `l-mb/claude-code-redaction-hooks` | Python / Apache-2.0 | public, push 2026-05-11, 23★, 10 test files | CC hooks for block/redact/observe | README opens with "**DO NOT** rely on this tool to actually offer meaningful protection" (CC hook limits) |
+| `rahulj51/geheim` | Go / MIT | public, push 2026-04-30, 12 test files | after-the-fact scan/redact/delete of transcripts (CC, Codex, OpenCode, Pi) | Not live; useful one-off to scrub old `~/.pi/agent/sessions/*.jsonl` |
+| `betterleaks/betterleaks` | Go / MIT | public, 2,413★, 119 test files | general secret scanner (used by `@normful/pi-stop-secrets-leaks`, `@moyai/pi-betterleaks-scanner`) | Generic rules incl. entropy; heavy for a hot path |
+
+## Gap no candidate fills
+
+1. A **configurable command source**, with the command list per repo or global, e.g. `mise` age-decrypt → `NAME→value` JSON, **fail-closed** when it errors.
+2. **Built-in rules limited to vendor prefixes**, with no keyword-assignment and no entropy rules. All other patterns opt-in.
+3. A `tool_result` return that **redacts and returns `structuredContent`**, not one that drops it.
+4. **Always-on** `tool_call` blocking of configured paths and commands such as `pa`, without a broad "strict mode".
+5. **`[REDACTED:NAME]`**, plus no off-switch command.
+
+## Recommendation
+
+**(3) Build our own.** Borrow code with MIT attribution, keeping copyright lines in a `CREDITS.md`/NOTICE:
+
+| Borrow | From | File |
+| --- | --- | --- |
+| Exact-value redactor (longest first, escaped, fresh regex per call) | `@sidshaytay/pi-secret-safe` 0.2.2 (MIT, © 2025 Sid Shaytay; itself MIT-derived per its `CREDITS.md`) | `extensions/core/redactor.ts`, `core/util.ts` |
+| Bash path-token extraction + env-dump command regex | same | `extensions/guards/commands.ts`, `guards/paths.ts` |
+| Message/details walker, PEM continuation | same | `extensions/guards/message.ts`, `guards/continuation.ts` |
+| Vendor-prefix regex set (drop `sk-` generic, `at_`/`cf_`, Bearer, assignment rules) | same or `@k3_2o/pi-secrets` (MIT) | `core/patterns.ts` `PREFIXED_RULES`; `src/secrets/patterns.ts` |
+| Fail-closed provider backstop (`return {}`) | `pi-redact` 0.1.0 (MIT, BubbatheVTOG) | `src/index.ts` |
+| Command-source loader shape (spawn → JSON → entries) | `@kickythrust/pi-fnox` 0.1.0 (MIT) | `extensions/index.ts` `loadSecrets` (make it throw instead of `resolve([])`) |
+
+Why not fork pi-secret-safe:
+
+- No public repo, so no history, no tests and no upstream.
+- About half of it would have to go: `exportToShell`, strict-mode gating, keyword-assignment capture, the off mode, its placeholder format.
+- The parts we need most (R1b, R5, `structuredContent`) are missing.
+
+Why not depend on k3_2o plus upstream PRs:
+
+- Its reversible-placeholder and arg-restoring design is a different threat model, and it never blocks.
+- It has a single maintainer with 10 commits.
+- R4 and R5 would be major PRs.
+
+Follow-up: run `geheim scan` over existing `~/.pi/agent/sessions` to find secrets that leaked before this extension existed.
