@@ -12,7 +12,7 @@ Each step is one atomic commit. Git user: `sripwoud`. Don't push until told.
 | 6 | Shared config in chezmoi (`~/.config/motus/config.json`)                                                                                  | todo                     |
 | 7 | Claude Code `PreToolUse` block hook; check whether #54196 is still open                                                                   | todo                     |
 | 8 | Smoke test in pi (below)                                                                                                                  | todo                     |
-| 9 | Roadmap: `pa` and `1password` adapters (D20)                                                                                              | todo                     |
+| 9 | Roadmap: `pa`, `pass`, `bitwarden`, `1password`, `sops`, `secret-tool` and `security` adapters (D20)                                      | todo                     |
 
 ## Test plan
 
