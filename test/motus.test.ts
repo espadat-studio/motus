@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
 
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent'
+import { stringify } from 'smol-toml'
 
 import { createMotus } from '../extensions/motus.ts'
 
@@ -21,8 +22,8 @@ async function setup(config: unknown = {}) {
   const home = await mkdtemp(join(tmpdir(), 'motus-'))
   homes.push(home)
   await mkdir(join(home, 'vault'))
-  const configPath = join(home, 'config.json')
-  if (config !== NOT_LOADED) await writeFile(configPath, JSON.stringify(config))
+  const configPath = join(home, 'config.toml')
+  if (config !== NOT_LOADED) await writeFile(configPath, stringify(config))
   const handlers = new Map<string, Handler>()
   let command: Handler = () => undefined
   const pi = {

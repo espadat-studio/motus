@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
+import { parse } from 'smol-toml'
+
 import type { SecretSource } from './sources.ts'
 import { commandSource } from './sources/command.ts'
 import { envSource } from './sources/env.ts'
@@ -25,7 +27,7 @@ export interface Config {
 
 type Options = Record<string, unknown>
 
-export const DEFAULT_CONFIG_PATH = join(homedir(), '.config', 'motus', 'config.json')
+export const DEFAULT_CONFIG_PATH = join(homedir(), '.config', 'motus', 'config.toml')
 export const DEFAULT_PREFIXES = ['sk-ant-', 'ghp_', 'github_pat_', 'AKIA', 'xox[bp]-']
 
 export const DEFAULT_TIMEOUT_MS = 10_000
@@ -71,9 +73,9 @@ export async function readConfig(path: string, env: NodeJS.ProcessEnv = process.
   })
   let raw: unknown
   try {
-    raw = JSON.parse(text)
+    raw = parse(text)
   } catch {
-    throw new Error(`${path} is not valid JSON`)
+    throw new Error(`${path} is not valid TOML`)
   }
   return parseConfig(raw, env)
 }

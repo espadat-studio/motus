@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 
+import { stringify } from 'smol-toml'
+
 import { describeLoad, loadFromConfig, loadSources, PartialLoadError, type SecretSource } from '../src/sources.ts'
 import { commandSource } from '../src/sources/command.ts'
 import { envSource } from '../src/sources/env.ts'
@@ -172,10 +174,10 @@ describe('loadSources', () => {
 
 describe('loadFromConfig', () => {
   test('loads sources from a valid config', async () => {
-    const path = join(await mkdtemp(join(tmpdir(), 'motus-')), 'config.json')
+    const path = join(await mkdtemp(join(tmpdir(), 'motus-')), 'config.toml')
     await writeFile(
       path,
-      JSON.stringify({
+      stringify({
         sources: [{ type: 'command', command: `printf '{"FIXTURE_KEY":"fixture-key-0001"}'` }],
       }),
     )
@@ -186,8 +188,8 @@ describe('loadFromConfig', () => {
   })
 
   test('reports an invalid config as a failed required source and still loads env', async () => {
-    const path = join(await mkdtemp(join(tmpdir(), 'motus-')), 'config.json')
-    await writeFile(path, JSON.stringify({ blockPath: [] }))
+    const path = join(await mkdtemp(join(tmpdir(), 'motus-')), 'config.toml')
+    await writeFile(path, stringify({ blockPath: [] }))
     const { config, result } = await loadFromConfig(path, tmpdir(), { API_TOKEN: 'fixture-token-0001' })
     assert.equal(config, undefined)
     assert.deepEqual(result.loaded, [{ id: 'env', count: 1 }])
