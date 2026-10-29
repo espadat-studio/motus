@@ -13,6 +13,17 @@ Install it globally:
 pi install npm:@espadat/motus
 ```
 
+`pi install` appends motus to the end of `packages` in `~/.pi/agent/settings.json`. Move it to the top:
+
+```json
+{
+  "packages": [
+    "npm:@espadat/motus",
+    "npm:other-extension"
+  ]
+}
+```
+
 Two rules matter, and motus can't check either:
 
 - Install globally, never with `--local`. Subagent [pi](https://github.com/earendil-works/pi) processes only load global extensions.

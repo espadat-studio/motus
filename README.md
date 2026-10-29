@@ -30,6 +30,17 @@ Install globally and load motus before every other extension:
 pi install npm:@espadat/motus
 ```
 
+`pi install` appends motus to the end of `packages` in `~/.pi/agent/settings.json`. Move it to the top:
+
+```json
+{
+  "packages": [
+    "npm:@espadat/motus",
+    "npm:other-extension"
+  ]
+}
+```
+
 - Global, never `--local`: subagent [pi](https://github.com/earendil-works/pi) processes only load global extensions.
 - First in `packages` of `~/.pi/agent/settings.json`: handlers run in load order, so an extension loaded earlier sees raw tool output and messages.
 - [pi](https://github.com/earendil-works/pi) can't report handler order, so motus doesn't check either rule.
