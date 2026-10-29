@@ -35,6 +35,23 @@ describe('envSource', () => {
     assert.ok(secrets.every(({ source }) => source === 'env'))
   })
 
+  test('skips gum styling vars', async () => {
+    const env = { GUM_LOG_KEY_FOREGROUND: '#ff0000', GUM_LOG_KEY_BACKGROUND: '#000000' }
+    assert.deepEqual(await envSource(env).load(ctx), [])
+  })
+
+  test('skips database urls without a password and keeps the rest', async () => {
+    const load = async (value: string) => (await envSource({ DATABASE_URL: value }).load(ctx)).map(({ name }) => name)
+    assert.deepEqual(await load('sqlite://dev.db'), [])
+    assert.deepEqual(await load('postgres://localhost/app'), [])
+    assert.deepEqual(await load('postgres://user:fixture-pass-0001@host/db'), ['DATABASE_URL'])
+    assert.deepEqual(await load('postgres://host/db?password=fixture-pass-0001'), ['DATABASE_URL'])
+    assert.deepEqual(await load('libsql://db.example?authToken=fixture-token-0001'), ['DATABASE_URL'])
+    assert.deepEqual(await load('postgres://fixture-token-0001@host/db'), ['DATABASE_URL'])
+    assert.deepEqual(await load('user:fixture-pass-0001'), ['DATABASE_URL'])
+    assert.deepEqual(await load('fixture-not-a-url-0001'), ['DATABASE_URL'])
+  })
+
   test('applies everywhere', async () => {
     assert.equal(await envSource({}).appliesTo({ cwd: '/' }), true)
   })
