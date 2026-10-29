@@ -4,13 +4,13 @@ import { describe, test } from 'node:test'
 import { createMatcher } from '../src/matcher.ts'
 
 const PREFIXES = ['sk-ant-', 'ghp_', 'github_pat_', 'AKIA', 'xox[bp]-']
-const options = { prefixes: PREFIXES, minValueLength: 8 }
+const OPTIONS = { prefixes: PREFIXES, minValueLength: 8 }
 
 const HEX_KEY = 'ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12'
 
 describe('createMatcher', () => {
   test('redacts exact values with the secret name', () => {
-    const { redact } = createMatcher([{ name: 'API_TOKEN', value: 'fixture-token-0001' }], options)
+    const { redact } = createMatcher([{ name: 'API_TOKEN', value: 'fixture-token-0001' }], OPTIONS)
     assert.equal(redact('token=fixture-token-0001;'), 'token=[REDACTED:API_TOKEN];')
   })
 
@@ -18,25 +18,25 @@ describe('createMatcher', () => {
     const { redact } = createMatcher([
       { name: 'SHORT', value: 'fixture-abcd' },
       { name: 'LONG', value: 'fixture-abcd-efgh' },
-    ], options)
+    ], OPTIONS)
     assert.equal(redact('fixture-abcd-efgh fixture-abcd'), '[REDACTED:LONG] [REDACTED:SHORT]')
   })
 
   test('ignores values under minValueLength with a warning naming the key', () => {
-    const { redact, warnings } = createMatcher([{ name: 'PIN', value: 'short' }], options)
+    const { redact, warnings } = createMatcher([{ name: 'PIN', value: 'short' }], OPTIONS)
     assert.equal(redact('pin is short'), 'pin is short')
     assert.equal(warnings.length, 1)
     assert.match(warnings[0] ?? '', /PIN/)
   })
 
   test('redacts hex with and without 0x, lower and upper case', () => {
-    const { redact } = createMatcher([{ name: 'PRIVATE_KEY', value: `0x${HEX_KEY}` }], options)
+    const { redact } = createMatcher([{ name: 'PRIVATE_KEY', value: `0x${HEX_KEY}` }], OPTIONS)
     for (const form of [`0x${HEX_KEY}`, HEX_KEY, HEX_KEY.toUpperCase(), `0x${HEX_KEY.toUpperCase()}`])
       assert.equal(redact(`k=${form}`), 'k=[REDACTED:PRIVATE_KEY]', form)
   })
 
   test('redacts a bare hex value that appears with 0x', () => {
-    const { redact } = createMatcher([{ name: 'PRIVATE_KEY', value: HEX_KEY }], options)
+    const { redact } = createMatcher([{ name: 'PRIVATE_KEY', value: HEX_KEY }], OPTIONS)
     assert.equal(redact(`0x${HEX_KEY}`), '[REDACTED:PRIVATE_KEY]')
   })
 
@@ -44,7 +44,7 @@ describe('createMatcher', () => {
     const { redact } = createMatcher([
       { name: 'RPC_URL', value: 'https://eth.example.test/v2/fixtureRpcKey0001' },
       { name: 'DATABASE_URL', value: 'postgres://fixtureuser:fixture%40pass@db.example.test/app' },
-    ], options)
+    ], OPTIONS)
     assert.equal(redact('key fixtureRpcKey0001'), 'key [REDACTED:RPC_URL]')
     assert.equal(redact('user fixtureuser'), 'user [REDACTED:DATABASE_URL]')
     assert.equal(redact('pass fixture@pass'), 'pass [REDACTED:DATABASE_URL]')
@@ -53,12 +53,13 @@ describe('createMatcher', () => {
   })
 
   test('redacts percent-encoded values', () => {
-    const { redact } = createMatcher([{ name: 'DB_PASSWORD', value: 'fix@ture/pa+ss' }], options)
+    const { redact } = createMatcher([{ name: 'DB_PASSWORD', value: 'fix@ture/pa+ss' }], OPTIONS)
     assert.equal(redact('url=fix%40ture%2Fpa%2Bss'), 'url=[REDACTED:DB_PASSWORD]')
+    assert.equal(redact('url=fix%40ture%2fpa%2bss'), 'url=[REDACTED:DB_PASSWORD]')
   })
 
   test('redacts whole vendor-prefixed tokens', () => {
-    const { redact } = createMatcher([], options)
+    const { redact } = createMatcher([], OPTIONS)
     const tokens = {
       'sk-ant-': 'sk-ant-api03-FIXTUREfixture0001',
       ghp_: 'ghp_FIXTUREfixture0000000000000000001',
@@ -72,13 +73,13 @@ describe('createMatcher', () => {
   })
 
   test('leaves bare prefixes and prefixes inside words alone', () => {
-    const { redact } = createMatcher([], options)
+    const { redact } = createMatcher([], OPTIONS)
     assert.equal(redact('tokens start with ghp_ or AKIA'), 'tokens start with ghp_ or AKIA')
     assert.equal(redact('XAKIAFIXTURE0000001'), 'XAKIAFIXTURE0000001')
   })
 
   test('walks every string in nested objects and arrays without mutating input', () => {
-    const { redact } = createMatcher([{ name: 'API_TOKEN', value: 'fixture-token-0001' }], options)
+    const { redact } = createMatcher([{ name: 'API_TOKEN', value: 'fixture-token-0001' }], OPTIONS)
     const input = {
       content: [{ type: 'text', text: 'fixture-token-0001' }],
       details: { diff: ['- old', '+ fixture-token-0001'], count: 2, ok: true, none: null },
@@ -96,7 +97,7 @@ describe('createMatcher', () => {
     const { redact } = createMatcher([
       { name: 'MNEMONIC', value: multiLine },
       { name: 'QUOTED_SECRET', value: quoted },
-    ], options)
+    ], OPTIONS)
     const payload = { messages: [{ role: 'user', content: [{ text: `a ${multiLine} b ${quoted} c` }] }] }
     const out = JSON.stringify(redact(payload))
     assert.ok(out.includes('a [REDACTED:MNEMONIC] b [REDACTED:QUOTED_SECRET] c'))
@@ -105,7 +106,7 @@ describe('createMatcher', () => {
   })
 
   test('leaves web3 values untouched', () => {
-    const { redact } = createMatcher([{ name: 'PRIVATE_KEY', value: `0x${HEX_KEY}` }], options)
+    const { redact } = createMatcher([{ name: 'PRIVATE_KEY', value: `0x${HEX_KEY}` }], OPTIONS)
     const web3 = [
       '0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b',
       '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
