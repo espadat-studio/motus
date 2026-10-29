@@ -81,6 +81,27 @@ describe('parseConfig', () => {
     ['1password with non-boolean fromEnv', {
       sources: [{ type: '1password', fromEnv: 'yes' }],
     }, /sources\[0\].fromEnv must be a boolean/],
+    [
+      'pa without entries or whole',
+      { sources: [{ type: 'pa' }] },
+      /sources\[0\] needs exactly one of entries or whole/,
+    ],
+    [
+      'pa with entries and whole',
+      { sources: [{ type: 'pa', entries: ['web/github'], whole: true }] },
+      /sources\[0\] needs exactly one of entries or whole/,
+    ],
+    ['pa with whole false', { sources: [{ type: 'pa', whole: false }] }, /sources\[0\].whole must be true/],
+    [
+      'pa with empty entries',
+      { sources: [{ type: 'pa', entries: [] }] },
+      /sources\[0\].entries must be a non-empty array of non-empty strings/,
+    ],
+    [
+      'pa with relative dir',
+      { sources: [{ type: 'pa', dir: 'store', whole: true }] },
+      /sources\[0\].dir is not absolute/,
+    ],
     ['unknown claudeCode key', { claudeCode: { block: [] } }, /claudeCode has unknown key "block"/],
     ['duplicate source ids', {
       sources: [{ type: 'command', command: 'true' }, { type: 'command', command: 'true' }],
