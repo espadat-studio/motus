@@ -1,0 +1,43 @@
+{
+  "name": "pi-motus",
+  "version": "0.0.0",
+  "description": "Keep secrets out of the model and pi's session files: exact-value redaction from pluggable secret sources, credential path and command blocks, fail-closed.",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "pi-coding-agent",
+    "secrets",
+    "redaction",
+    "redact",
+    "secret-scanning",
+    "security",
+    "mise",
+    "age",
+    "claude-code"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/espadat-studio/pi-motus.git"
+  },
+  "type": "module",
+  "files": [
+    "extensions",
+    "src"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/motus.ts"
+    ]
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=1.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0"
+  }
+}

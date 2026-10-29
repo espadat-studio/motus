@@ -9,21 +9,21 @@ _Draft 2026-10-29 UTC, from a grilling session. Open questions are at the end._
 
 ## Decisions
 
-| # | Decision | Why |
-| --- | --- | --- |
-| D1 | Defend against accidental leaks only | Matches past incidents. Redaction can't stop deliberate exfiltration |
-| D2 | pi gets redaction and blocks. Claude Code gets a `PreToolUse` hook for **blocks only** | CC issue #54196: `updatedToolOutput` is ignored for Bash. CC also writes raw `toolUseResult` to its JSONL before hooks run |
-| D3 | Secret sources are pluggable adapters (see below) | Supports mise, 1Password, pa, or any secret manager without hard-coding |
-| D4 | Exact values plus vendor prefixes (`sk-ant-`, `ghp_`, `github_pat_`, `AKIA`, `xox[bp]-`). **No** generic 64-hex, entropy or keyword rules | Web3 repos: tx hashes, addresses and storage slots must survive. pi-secret-safe fails exactly here |
-| D5 | Fail-closed, scoped. A required source that fails in a repo where it applies blocks bash, read and MCP tools. Elsewhere: warn. `/motus continue` accepts partial protection for the session | Never silently unprotected; no nagging in unrelated repos |
-| D6 | No `/motus off` | Turning redaction off means sending secrets to the model. Read values in your own terminal |
-| D7 | Placeholder `[REDACTED:NAME]` | The model can still reason about which variable was there; names aren't secret |
-| D8 | Block credential files by path; never parse them | The agent never needs them. A leaked age master key exposes everything encrypted with it |
-| D9 | Block secret-manager CLIs that print values (`pa show`, `gh auth token`, `op read`, …), configurable | 759 pa entries can't be pre-loaded for exact-match redaction |
-| D10 | Blocks can't be lifted from inside pi | Safety decisions belong to the human, outside the agent |
-| D11 | One shared config file, `~/.config/pi-motus/config.json`, for the pi extension and the CC hook | One list to maintain. Shared config, not shared code |
-| D12 | Build our own; borrow MIT code with credit | See `research/oss-survey.md`: no fork base (the closest one has no public repo and redacts `0x` addresses) |
-| D13 | Own repo; publish to npm later | Testable, creditable, and the gap is real (fail-closed, command sources, web3-safe defaults) |
+| #   | Decision                                                                                                                                                                                    | Why                                                                                                                        |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Defend against accidental leaks only                                                                                                                                                        | Matches past incidents. Redaction can't stop deliberate exfiltration                                                       |
+| D2  | pi gets redaction and blocks. Claude Code gets a `PreToolUse` hook for **blocks only**                                                                                                      | CC issue #54196: `updatedToolOutput` is ignored for Bash. CC also writes raw `toolUseResult` to its JSONL before hooks run |
+| D3  | Secret sources are pluggable adapters (see below)                                                                                                                                           | Supports mise, 1Password, pa, or any secret manager without hard-coding                                                    |
+| D4  | Exact values plus vendor prefixes (`sk-ant-`, `ghp_`, `github_pat_`, `AKIA`, `xox[bp]-`). **No** generic 64-hex, entropy or keyword rules                                                   | Web3 repos: tx hashes, addresses and storage slots must survive. pi-secret-safe fails exactly here                         |
+| D5  | Fail-closed, scoped. A required source that fails in a repo where it applies blocks bash, read and MCP tools. Elsewhere: warn. `/motus continue` accepts partial protection for the session | Never silently unprotected; no nagging in unrelated repos                                                                  |
+| D6  | No `/motus off`                                                                                                                                                                             | Turning redaction off means sending secrets to the model. Read values in your own terminal                                 |
+| D7  | Placeholder `[REDACTED:NAME]`                                                                                                                                                               | The model can still reason about which variable was there; names aren't secret                                             |
+| D8  | Block credential files by path; never parse them                                                                                                                                            | The agent never needs them. A leaked age master key exposes everything encrypted with it                                   |
+| D9  | Block secret-manager CLIs that print values (`pa show`, `gh auth token`, `op read`, …), configurable                                                                                        | 759 pa entries can't be pre-loaded for exact-match redaction                                                               |
+| D10 | Blocks can't be lifted from inside pi                                                                                                                                                       | Safety decisions belong to the human, outside the agent                                                                    |
+| D11 | One shared config file, `~/.config/pi-motus/config.json`, for the pi extension and the CC hook                                                                                              | One list to maintain. Shared config, not shared code                                                                       |
+| D12 | Build our own; borrow MIT code with credit                                                                                                                                                  | See `research/oss-survey.md`: no fork base (the closest one has no public repo and redacts `0x` addresses)                 |
+| D13 | Own repo; publish to npm later                                                                                                                                                              | Testable, creditable, and the gap is real (fail-closed, command sources, web3-safe defaults)                               |
 
 ## Architecture
 
@@ -44,14 +44,14 @@ flowchart LR
 
 ### pi events
 
-| Event | Job |
-| --- | --- |
-| `session_start` | Load sources into memory. Set degraded state. Notify counts, never values |
-| `tool_call` | Block paths (read args; bash commands mentioning them) and commands (word at command position, after `\|`, `;`, `&&`, `$(`). Block bash/read/MCP while degraded |
-| `tool_result` | Redact `content` **and** `structuredContent` (pi docs: replacing only `content` drops `structuredContent`) |
-| `message_end` | Redact finalized assistant and user messages before they're saved |
-| `input` | Redact secrets pasted into prompts before they're saved |
-| `before_provider_request` | Final scan of the serialized payload. On internal error, send an empty payload rather than raw (pattern from `pi-redact`) |
+| Event                     | Job                                                                                                                                                             |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session_start`           | Load sources into memory. Set degraded state. Notify counts, never values                                                                                       |
+| `tool_call`               | Block paths (read args; bash commands mentioning them) and commands (word at command position, after `\|`, `;`, `&&`, `$(`). Block bash/read/MCP while degraded |
+| `tool_result`             | Redact `content` **and** `structuredContent` (pi docs: replacing only `content` drops `structuredContent`)                                                      |
+| `message_end`             | Redact finalized assistant and user messages before they're saved                                                                                               |
+| `input`                   | Redact secrets pasted into prompts before they're saved                                                                                                         |
+| `before_provider_request` | Final scan of the serialized payload. On internal error, send an empty payload rather than raw (pattern from `pi-redact`)                                       |
 
 Still to verify by test: `tool_result` changes are what gets written to the session JSONL. `tool_execution_update` streaming may show raw output locally; acceptable, since it never reaches the model.
 
@@ -69,15 +69,15 @@ Still to verify by test: `tool_result` changes are what gets written to the sess
 
 ```ts
 interface SecretSource {
-  id: string;
-  appliesTo(ctx: { cwd: string }): Promise<boolean>;
-  load(ctx: { cwd: string; signal: AbortSignal }): Promise<Secret[]>;
+  id: string
+  appliesTo(ctx: { cwd: string }): Promise<boolean>
+  load(ctx: { cwd: string; signal: AbortSignal }): Promise<Secret[]>
 }
 
 interface Secret {
-  name: string;
-  value: string;
-  source: string;
+  name: string
+  value: string
+  source: string
 }
 ```
 
@@ -86,13 +86,13 @@ interface Secret {
 - Adapters return secrets. The core owns derived forms, matching and policy.
 - Each source config has `required: boolean` (default `true`), a timeout (default 10 s) and adapter options.
 
-| Adapter | Loads | Notes |
-| --- | --- | --- |
-| `env` | `process.env` whose names match `KEY\|TOKEN\|SECRET\|PASS\|PRIVATE\|MNEMONIC\|DATABASE_URL\|AUTH\|CREDENTIAL\|DSN`, with a name denylist (e.g. `SSH_AUTH_SOCK`, `KITTY_PUBLIC_KEY`) | Always on and can't fail |
-| `command` | Any command printing `{NAME: value}` JSON on stdout. Non-zero exit = failure | Generic fallback for any manager |
-| `mise` | For each listed config plus the cwd: keys stored as `{ age = ... }`, decrypted with `mise env --json -C <dir>` (`MISE_ENV` for `config.<env>.toml`) | Option: path to a list file (can reuse `~/.config/rotate-mise-secrets/files`). Warns when cwd age keys are missing from the list (drift) |
-| `1password` | Resolves `op://` references from configured refs and/or env values that are references (`op read`) | Biometric/session prompts at startup are an open question |
-| `pa` | Resolves **explicitly listed** entries only (`pa show <name>`) | Every decrypt needs a YubiKey touch once the plain key is off disk. Startup loading is an open question |
+| Adapter     | Loads                                                                                                                                                                               | Notes                                                                                                                                    |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `env`       | `process.env` whose names match `KEY\|TOKEN\|SECRET\|PASS\|PRIVATE\|MNEMONIC\|DATABASE_URL\|AUTH\|CREDENTIAL\|DSN`, with a name denylist (e.g. `SSH_AUTH_SOCK`, `KITTY_PUBLIC_KEY`) | Always on and can't fail                                                                                                                 |
+| `command`   | Any command printing `{NAME: value}` JSON on stdout. Non-zero exit = failure                                                                                                        | Generic fallback for any manager                                                                                                         |
+| `mise`      | For each listed config plus the cwd: keys stored as `{ age = ... }`, decrypted with `mise env --json -C <dir>` (`MISE_ENV` for `config.<env>.toml`)                                 | Option: path to a list file (can reuse `~/.config/rotate-mise-secrets/files`). Warns when cwd age keys are missing from the list (drift) |
+| `1password` | Resolves `op://` references from configured refs and/or env values that are references (`op read`)                                                                                  | Biometric/session prompts at startup are an open question                                                                                |
+| `pa`        | Resolves **explicitly listed** entries only (`pa show <name>`)                                                                                                                      | Every decrypt needs a YubiKey touch once the plain key is off disk. Startup loading is an open question                                  |
 
 Adapters are built in at first; split into packages only if a third party wants one.
 
@@ -117,13 +117,13 @@ Adapters are built in at first; split into packages only if a third party wants 
 
 ## Failure modes
 
-| Failure | Behavior |
-| --- | --- |
-| Required source throws or times out, and applies to the cwd | Degraded state: block bash/read/MCP with a reason; `/motus continue` overrides for the session |
-| Required source fails, doesn't apply to the cwd | Warn once |
-| One of N mise files fails to decrypt | Redact what loaded; name the failed file in the warning; degraded only if it covers the cwd |
-| Redaction hook throws | `tool_result`: replace output with an error marker, never raw. `before_provider_request`: send an empty payload |
-| Invalid config | Same as a failed required source |
+| Failure                                                     | Behavior                                                                                                        |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Required source throws or times out, and applies to the cwd | Degraded state: block bash/read/MCP with a reason; `/motus continue` overrides for the session                  |
+| Required source fails, doesn't apply to the cwd             | Warn once                                                                                                       |
+| One of N mise files fails to decrypt                        | Redact what loaded; name the failed file in the warning; degraded only if it covers the cwd                     |
+| Redaction hook throws                                       | `tool_result`: replace output with an error marker, never raw. `before_provider_request`: send an empty payload |
+| Invalid config                                              | Same as a failed required source                                                                                |
 
 ## Claude Code hook (D2)
 
@@ -133,6 +133,6 @@ Adapters are built in at first; split into packages only if a third party wants 
 ## Open questions
 
 1. `pa` and 1Password adapters: load at session start (touch or biometric prompt every session), lazily on first match (impossible: we need the value to match), or only blocks? Leaning: blocks by default; startup loading opt-in per entry.
-2. Implementation language and runtime: TypeScript run by pi directly; test runner (`bun test` vs vitest).
-3. Package name; whether the CC hook ships in the same package.
+2. ~~Implementation language and runtime.~~ Resolved 2026-10-29: TypeScript source loaded by pi through jiti, no build step; `node --test` with native type stripping (same as `pi-memsearch`).
+3. ~~Package name~~ (`pi-motus`); whether the CC hook ships in the same package.
 4. Whether to scrub old sessions with `geheim` (leak audit 2026-10-29 found 0 of 68 values in stored sessions, so low priority).
