@@ -40,17 +40,20 @@ const TOP_LEVEL_KEYS = [
 const COMMON_SOURCE_KEYS = ['type', 'id', 'required', 'timeoutMs']
 const ADAPTERS: Record<
   string,
-  { keys: string[]; create(options: Options, at: string, env: NodeJS.ProcessEnv): SecretSource }
+  { keys: string[]; create(id: string, options: Options, at: string, env: NodeJS.ProcessEnv): SecretSource }
 > = {
-  env: { keys: [], create: (_options, _at, env) => envSource(env) },
+  env: { keys: [], create: (id, _options, _at, env) => envSource(env, id) },
   command: {
     keys: ['command'],
-    create: (options, at) => {
-      const { command } = options
+    create: (id, { command }, at) => {
       if (typeof command !== 'string' || command === '') throw new Error(`${at}.command must be a non-empty string`)
-      return commandSource(typeof options['id'] === 'string' ? options['id'] : 'command', command)
+      return commandSource(id, command)
     },
   },
+}
+
+export function defaultEnvSource(env: NodeJS.ProcessEnv): ConfiguredSource {
+  return { source: envSource(env), required: true, timeoutMs: DEFAULT_TIMEOUT_MS }
 }
 
 export async function readConfig(path: string, env: NodeJS.ProcessEnv = process.env): Promise<Config> {
@@ -71,17 +74,13 @@ export function parseConfig(raw: unknown, env: NodeJS.ProcessEnv = process.env):
   rejectUnknownKeys(config, TOP_LEVEL_KEYS, 'config')
   const claudeCode = asObject(config['claudeCode'] ?? {}, 'claudeCode')
   rejectUnknownKeys(claudeCode, ['blockCommands'], 'claudeCode')
-  const minValueLength = config['minValueLength'] ?? 8
-  if (!Number.isInteger(minValueLength) || (minValueLength as number) < 1)
-    throw new Error('minValueLength must be a positive integer')
-
   return {
     sources: parseSources(config['sources'] ?? [], env),
     prefixes: asStrings(config['prefixes'] ?? DEFAULT_PREFIXES, 'prefixes'),
     blockPaths: asStrings(config['blockPaths'] ?? [], 'blockPaths'),
     blockCommands: asStrings(config['blockCommands'] ?? [], 'blockCommands'),
     degradedAllowTools: asStrings(config['degradedAllowTools'] ?? [], 'degradedAllowTools'),
-    minValueLength: minValueLength as number,
+    minValueLength: asPositiveInteger(config['minValueLength'] ?? 8, 'minValueLength'),
     claudeCode: { blockCommands: asStrings(claudeCode['blockCommands'] ?? [], 'claudeCode.blockCommands') },
   }
 }
@@ -89,22 +88,31 @@ export function parseConfig(raw: unknown, env: NodeJS.ProcessEnv = process.env):
 function parseSources(raw: unknown, env: NodeJS.ProcessEnv): ConfiguredSource[] {
   if (!Array.isArray(raw)) throw new Error('sources must be an array')
   const sources = raw.map((entry, index) => parseSource(entry, `sources[${index}]`, env))
-  if (!sources.some(({ source }) => source.id === 'env'))
-    sources.unshift({ source: envSource(env), required: true, timeoutMs: DEFAULT_TIMEOUT_MS })
+  if (!(raw as Options[]).some(({ type }) => type === 'env')) sources.unshift(defaultEnvSource(env))
+  const ids = sources.map(({ source }) => source.id)
+  const duplicate = ids.find((id, index) => ids.indexOf(id) !== index)
+  if (duplicate !== undefined) throw new Error(`source id "${duplicate}" is used more than once`)
   return sources
 }
 
 function parseSource(raw: unknown, at: string, env: NodeJS.ProcessEnv): ConfiguredSource {
   const options = asObject(raw, at)
-  const { type, id, required = true, timeoutMs = DEFAULT_TIMEOUT_MS } = options
+  const { type, id = type, required = true, timeoutMs = DEFAULT_TIMEOUT_MS } = options
   const adapter = typeof type === 'string' ? ADAPTERS[type] : undefined
   if (!adapter) throw new Error(`${at}.type ${JSON.stringify(type)} is unknown`)
   rejectUnknownKeys(options, [...COMMON_SOURCE_KEYS, ...adapter.keys], at)
-  if (id !== undefined && (typeof id !== 'string' || id === '')) throw new Error(`${at}.id must be a non-empty string`)
+  if (typeof id !== 'string' || id === '') throw new Error(`${at}.id must be a non-empty string`)
   if (typeof required !== 'boolean') throw new Error(`${at}.required must be a boolean`)
-  if (!Number.isInteger(timeoutMs) || (timeoutMs as number) < 1)
-    throw new Error(`${at}.timeoutMs must be a positive integer`)
-  return { source: adapter.create(options, at, env), required, timeoutMs: timeoutMs as number }
+  return {
+    source: adapter.create(id, options, at, env),
+    required,
+    timeoutMs: asPositiveInteger(timeoutMs, `${at}.timeoutMs`),
+  }
+}
+
+function asPositiveInteger(raw: unknown, at: string): number {
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1) throw new Error(`${at} must be a positive integer`)
+  return raw
 }
 
 function asObject(raw: unknown, at: string): Options {

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
-import type { SecretSource } from '../sources.ts'
+import type { Secret, SecretSource } from '../sources.ts'
 
 const run = promisify(execFile)
 const BAD_OUTPUT = 'stdout is not a JSON object of string values'
@@ -23,10 +23,12 @@ export function commandSource(id: string, command: string): SecretSource {
         throw new Error(BAD_OUTPUT)
       }
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error(BAD_OUTPUT)
-      return Object.entries(parsed).map(([name, value]) => {
+      const secrets: Secret[] = []
+      for (const [name, value] of Object.entries(parsed)) {
         if (typeof value !== 'string') throw new Error(BAD_OUTPUT)
-        return { name, value, source: id }
-      })
+        if (value) secrets.push({ name, value, source: id })
+      }
+      return secrets
     },
   }
 }

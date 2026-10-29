@@ -1,5 +1,4 @@
-import { type Config, type ConfiguredSource, DEFAULT_TIMEOUT_MS, readConfig } from './config.ts'
-import { envSource } from './sources/env.ts'
+import { type Config, type ConfiguredSource, defaultEnvSource, readConfig } from './config.ts'
 
 export interface Secret {
   name: string
@@ -49,8 +48,7 @@ export async function loadFromConfig(
     const config = await readConfig(path, env)
     return { config, result: await loadSources(config.sources, cwd) }
   } catch (error) {
-    const fallback = { source: envSource(env), required: true, timeoutMs: DEFAULT_TIMEOUT_MS }
-    const result = await loadSources([fallback], cwd)
+    const result = await loadSources([defaultEnvSource(env)], cwd)
     result.failures.unshift({ id: 'config', required: true, applies: true, reason: reasonOf(error) })
     return { config: undefined, result }
   }
@@ -76,7 +74,9 @@ async function loadOne(
     return { id: source.id, secrets }
   } catch (error) {
     const reason = signal.aborted ? `timed out after ${timeoutMs} ms` : reasonOf(error)
-    const applies = await source.appliesTo({ cwd }).catch(() => true)
+    const applies = await Promise
+      .race([source.appliesTo({ cwd }), rejectOnAbort(AbortSignal.timeout(timeoutMs))])
+      .catch(() => true)
     return { failure: { id: source.id, required, applies, reason } }
   }
 }

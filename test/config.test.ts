@@ -55,6 +55,12 @@ describe('parseConfig', () => {
     ],
     ['command without command', { sources: [{ type: 'command' }] }, /sources\[0\].command must be a non-empty string/],
     ['unknown claudeCode key', { claudeCode: { block: [] } }, /claudeCode has unknown key "block"/],
+    ['duplicate source ids', {
+      sources: [{ type: 'command', command: 'true' }, { type: 'command', command: 'true' }],
+    }, /source id "command" is used more than once/],
+    ['a non-env source taking the env id', {
+      sources: [{ type: 'command', id: 'env', command: 'true' }],
+    }, /source id "env" is used more than once/],
   ]
   for (const [label, raw, message] of invalid)
     test(`rejects ${label}`, () => assert.throws(() => parseConfig(raw), message))

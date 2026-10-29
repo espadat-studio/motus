@@ -42,6 +42,11 @@ describe('commandSource', () => {
     assert.deepEqual(await source.load(ctx), [{ name: 'API_TOKEN', value: 'fixture-token-0001', source: 'vault' }])
   })
 
+  test('skips empty values', async () => {
+    const source = commandSource('vault', `printf '{"EMPTY_KEY":"","API_TOKEN":"fixture-token-0001"}'`)
+    assert.deepEqual((await source.load(ctx)).map(({ name }) => name), ['API_TOKEN'])
+  })
+
   test('runs in the cwd', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'motus-'))
     await writeFile(join(cwd, 'secrets.json'), '{"FIXTURE_KEY":"fixture-key-0001"}')
@@ -114,6 +119,18 @@ describe('loadSources', () => {
     const hang = fakeSource('hang', () => new Promise(() => {}))
     const result = await loadSources([{ source: hang, required: true, timeoutMs: 20 }], tmpdir())
     assert.deepEqual(result.failures, [{ id: 'hang', required: true, applies: true, reason: 'timed out after 20 ms' }])
+  })
+
+  test('treats a hanging appliesTo as applying', async () => {
+    const source: SecretSource = {
+      id: 'stuck',
+      appliesTo: () => new Promise(() => {}),
+      load: async () => {
+        throw new Error('failed')
+      },
+    }
+    const result = await loadSources([{ source, required: true, timeoutMs: 20 }], tmpdir())
+    assert.equal(result.failures[0]?.applies, true)
   })
 
   test('treats a throwing appliesTo as applying', async () => {
