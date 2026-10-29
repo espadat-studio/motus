@@ -5,13 +5,13 @@ description: The five secret sources motus loads at session start, and the optio
 
 A source loads named secrets when the session starts. motus keeps the values in memory, adds their other spellings (with and without `0x`, inside a URL, percent-encoded), and redacts all of them.
 
-| `type`      | Options                     | Loads                                              |
-| ----------- | --------------------------- | -------------------------------------------------- |
-| `env`       | none                        | `process.env` entries whose names look secret      |
-| `command`   | `command`                   | A shell command that prints a JSON object          |
-| `mise`      | `listFile`                  | Age-encrypted mise values                          |
-| `pa`        | `entries` or `whole`, `dir` | Entries from a [pa](https://passwordass.org) store |
-| `1password` | `refs`, `fromEnv`           | `op://` references                                 |
+| `type`                               | Options                     | Loads                                              |
+| ------------------------------------ | --------------------------- | -------------------------------------------------- |
+| `env`                                | none                        | `process.env` entries whose names look secret      |
+| `command`                            | `command`                   | A shell command that prints a JSON object          |
+| [`mise`](https://mise.jdx.dev)       | `listFile`                  | Age-encrypted [mise](https://mise.jdx.dev) values  |
+| [`pa`](https://passwordass.org)      | `entries` or `whole`, `dir` | Entries from a [pa](https://passwordass.org) store |
+| [`1password`](https://1password.com) | `refs`, `fromEnv`           | `op://` references                                 |
 
 ## env
 
@@ -30,7 +30,7 @@ command = "my-vault export --json"
 
 ## mise
 
-For each file in `listFile` plus the working directory's mise config, motus finds keys stored as `{ age = ... }` and decrypts them with `mise env --json`. A `config.<env>.toml` file sets `MISE_ENV`.
+For each file in `listFile` plus the working directory's [mise](https://mise.jdx.dev) config, motus finds keys stored as `{ age = ... }` and decrypts them with [`mise env --json`](https://mise.jdx.dev). A `config.<env>.toml` file sets `MISE_ENV`.
 
 ```toml
 [[sources]]
@@ -39,12 +39,12 @@ listFile = "~/.config/rotate-mise-secrets/files"
 ```
 
 - `listFile` has one absolute path per line. Blank lines and `#` comments are skipped.
-- If the working directory has age keys that the list doesn't, motus warns about the drift and loads them anyway.
+- If the working directory has [age](https://age-encryption.org) keys that the list doesn't, motus warns about the drift and loads them anyway.
 - If one file fails, the others still load. The session degrades only when the failed file covers the working directory.
 
 ## pa
 
-Loads entries at session start so their values get redacted. Keep `pa` in `blockCommands` so `pa show` stays blocked.
+Loads entries at session start so their values get redacted. Keep [`pa`](https://passwordass.org) in `blockCommands` so [`pa show`](https://passwordass.org) stays blocked.
 
 ```toml
 [[sources]]
@@ -59,13 +59,13 @@ entries = ["web/github", "mail"]
 
 The unlock method decides what startup costs:
 
-| Store key                  | Startup                        | Use                    |
-| -------------------------- | ------------------------------ | ---------------------- |
-| Plain age key (pa default) | No prompt                      | `whole`                |
-| TPM (`age-plugin-tpm`)     | No prompt                      | `whole`                |
-| YubiKey                    | PIN and a touch, every startup | A short `entries` list |
+| Store key                                                                           | Startup                        | Use                    |
+| ----------------------------------------------------------------------------------- | ------------------------------ | ---------------------- |
+| Plain [age](https://age-encryption.org) key ([pa](https://passwordass.org) default) | No prompt                      | `whole`                |
+| TPM (`age-plugin-tpm`)                                                              | No prompt                      | `whole`                |
+| YubiKey                                                                             | PIN and a touch, every startup | A short `entries` list |
 
-The YubiKey PIN needs a GUI pinentry, because pi owns the terminal. Without one the source times out and the session degrades.
+The YubiKey PIN needs a GUI pinentry, because [pi](https://github.com/earendil-works/pi) owns the terminal. Without one the source times out and the session degrades.
 
 Several stores mean several sources, each with its own `id` and `dir`:
 
@@ -86,7 +86,7 @@ timeoutMs = 30000
 
 ## 1password
 
-Resolves `op://` references in one `op inject` call at session start. Expect one 1Password biometric or session prompt every session.
+Resolves `op://` references in one [`op inject`](https://developer.1password.com/docs/cli/) call at session start. Expect one [1Password](https://1password.com) biometric or session prompt every session.
 
 ```toml
 [[sources]]
@@ -100,4 +100,4 @@ API_TOKEN = "op://dev/api/token"
 - `refs` names each secret by its key.
 - `fromEnv = true` also loads env vars whose values are `op://` references, named by the variable.
 - Give it `refs`, `fromEnv = true`, or both.
-- A locked or missing `op` fails the source. With `required = true` the session starts degraded.
+- A locked or missing [`op`](https://developer.1password.com/docs/cli/) fails the source. With `required = true` the session starts degraded.

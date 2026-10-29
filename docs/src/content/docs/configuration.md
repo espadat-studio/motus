@@ -23,19 +23,19 @@ listFile = "~/.config/rotate-mise-secrets/files"
 blockCommands = ["env", "printenv", "mise env", "cat .env*"]
 ```
 
-pi ignores the `[claudeCode]` table: it redacts `env` output instead of blocking it. Only the Claude Code hook merges those commands into its blocks.
+[pi](https://github.com/earendil-works/pi) ignores the `[claudeCode]` table: it redacts `env` output instead of blocking it. Only the Claude Code hook merges those commands into its blocks.
 
 ## Keys
 
-| Key                        | Default                                              | Read by         | Meaning                                                         |
-| -------------------------- | ---------------------------------------------------- | --------------- | --------------------------------------------------------------- |
-| `sources`                  | `[]`, plus an `env` source unless you list one       | pi              | Where secrets load from. See [Sources](/sources/)               |
-| `prefixes`                 | `sk-ant-`, `ghp_`, `github_pat_`, `AKIA`, `xox[bp]-` | pi              | Vendor key prefixes redacted even when no source loaded the key |
-| `blockPaths`               | `[]`                                                 | pi, Claude Code | Files and directories that tools may not touch                  |
-| `blockCommands`            | `[]`                                                 | pi, Claude Code | Commands to block                                               |
-| `degradedAllowTools`       | `[]`                                                 | pi              | Tools still allowed while the session is degraded               |
-| `minValueLength`           | `8`                                                  | pi              | Shorter values are ignored, with a warning that names the key   |
-| `claudeCode.blockCommands` | `[]`                                                 | Claude Code     | Extra blocks for the hook, which can't redact                   |
+| Key                        | Default                                              | Read by                                                 | Meaning                                                         |
+| -------------------------- | ---------------------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------- |
+| `sources`                  | `[]`, plus an `env` source unless you list one       | [pi](https://github.com/earendil-works/pi)              | Where secrets load from. See [Sources](/sources/)               |
+| `prefixes`                 | `sk-ant-`, `ghp_`, `github_pat_`, `AKIA`, `xox[bp]-` | [pi](https://github.com/earendil-works/pi)              | Vendor key prefixes redacted even when no source loaded the key |
+| `blockPaths`               | `[]`                                                 | [pi](https://github.com/earendil-works/pi), Claude Code | Files and directories that tools may not touch                  |
+| `blockCommands`            | `[]`                                                 | [pi](https://github.com/earendil-works/pi), Claude Code | Commands to block                                               |
+| `degradedAllowTools`       | `[]`                                                 | [pi](https://github.com/earendil-works/pi)              | Tools still allowed while the session is degraded               |
+| `minValueLength`           | `8`                                                  | [pi](https://github.com/earendil-works/pi)              | Shorter values are ignored, with a warning that names the key   |
+| `claudeCode.blockCommands` | `[]`                                                 | Claude Code                                             | Extra blocks for the hook, which can't redact                   |
 
 ## Block paths
 
@@ -49,7 +49,7 @@ Entries expand `~`, `$HOME`, environment variables and `${VAR:-fallback}`, then 
 
 An entry matches the word at command position: at the start, and after `|`, `;`, `&&`, `||`, `$(`, a backtick or `(`. Wrappers like `env VAR=x`, `sudo`, `command`, `exec`, `time`, `nohup` and `xargs` are skipped. `bash -c '…'` and `eval` are searched too.
 
-- `"pa"` blocks every `pa` command.
+- `"pa"` blocks every [`pa`](https://passwordass.org) command.
 - `"gh auth token"` needs all three words, in order.
 - `*` is a glob: `"cat .env*"` blocks `cat .env.local`.
 
@@ -59,13 +59,13 @@ Scripts, aliases and shell functions are not covered.
 
 Every source also takes these:
 
-| Key         | Default    | Meaning                                                            |
-| ----------- | ---------- | ------------------------------------------------------------------ |
-| `type`      | required   | `env`, `command`, `mise`, `pa` or `1password`                      |
-| `id`        | the `type` | Name shown in reports. Must be unique                              |
-| `required`  | `true`     | A required source that fails where it applies degrades the session |
-| `timeoutMs` | `10000`    | Load deadline for this source                                      |
+| Key         | Default    | Meaning                                                                                                                   |
+| ----------- | ---------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `type`      | required   | `env`, `command`, [`mise`](https://mise.jdx.dev), [`pa`](https://passwordass.org) or [`1password`](https://1password.com) |
+| `id`        | the `type` | Name shown in reports. Must be unique                                                                                     |
+| `required`  | `true`     | A required source that fails where it applies degrades the session                                                        |
+| `timeoutMs` | `10000`    | Load deadline for this source                                                                                             |
 
 ## Degraded sessions
 
-A required source can fail: a locked `op`, a timeout, invalid config. If it applies to the working directory, the session is degraded. Every tool not in `degradedAllowTools` is blocked, and so are `!` commands, until you run `/motus continue`. A failure in a repo the source doesn't apply to only warns once.
+A required source can fail: a locked [`op`](https://developer.1password.com/docs/cli/), a timeout, invalid config. If it applies to the working directory, the session is degraded. Every tool not in `degradedAllowTools` is blocked, and so are `!` commands, until you run `/motus continue`. A failure in a repo the source doesn't apply to only warns once.

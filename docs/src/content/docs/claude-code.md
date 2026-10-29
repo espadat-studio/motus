@@ -13,7 +13,7 @@ Claude Code ignores `updatedToolOutput` for Bash and writes the raw tool result 
 - a `Bash` command matches `blockCommands` or `claudeCode.blockCommands`
 - a `Bash` command contains a `blockPaths` path
 
-Because it can't redact, the hook also blocks commands that pi would only redact. Put them in `claudeCode.blockCommands`:
+Because it can't redact, the hook also blocks commands that [pi](https://github.com/earendil-works/pi) would only redact. Put them in `claudeCode.blockCommands`:
 
 ```toml
 blockCommands = ["pa", "gh auth token", "op read"]
@@ -32,6 +32,6 @@ The hook fails closed. A missing or invalid config, malformed input or a crash a
 `!` shell mode bypasses motus. Never run `!env`, `!mise env` or `!pa …` in Claude Code.
 :::
 
-Claude Code adds `!` commands and their output to the conversation, so the values reach the model on the next request. `!` commands are not tool calls. `PreToolUse` never fires, and the hook never sees them. pi has no such gap, because its `user_bash` handler redacts `!` output.
+Claude Code adds `!` commands and their output to the conversation, so the values reach the model on the next request. `!` commands are not tool calls. `PreToolUse` never fires, and the hook never sees them. [pi](https://github.com/earendil-works/pi) has no such gap, because its `user_bash` handler redacts `!` output.
 
 The hook also leaves other tools alone: `Grep`, `Glob`, `Edit`, `Write` and MCP tools. Read secret values in your own terminal.
