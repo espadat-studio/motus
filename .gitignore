@@ -1,0 +1,18 @@
+# node / typescript
+node_modules/
+dist/
+*.tsbuildinfo
+bun.lock
+
+# env
+.env
+.env.*
+!.env.example
+
+*.log
+
+# astro (docs site); docs/dist and docs/node_modules match the patterns above
+docs/.astro/
+
+# machine-specific inventory and hardening log; never publish
+meta/personal/
