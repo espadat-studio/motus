@@ -54,6 +54,7 @@ describe('parseConfig', () => {
       /sources\[0\].timeoutMs must be a positive integer/,
     ],
     ['command without command', { sources: [{ type: 'command' }] }, /sources\[0\].command must be a non-empty string/],
+    ['mise without listFile', { sources: [{ type: 'mise' }] }, /sources\[0\].listFile must be a non-empty string/],
     ['unknown claudeCode key', { claudeCode: { block: [] } }, /claudeCode has unknown key "block"/],
     ['duplicate source ids', {
       sources: [{ type: 'command', command: 'true' }, { type: 'command', command: 'true' }],
