@@ -4,13 +4,12 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
+import { parse } from 'smol-toml'
+
 import { PartialLoadError, type Secret, type SecretSource } from '../sources.ts'
 
 const run = promisify(execFile)
-// ponytail: line regex, not a TOML parser; misses age keys in multi-line tables, dotted `env.KEY` form and inline task env
-const AGE_KEY = /^\s*["']?([A-Za-z_]\w*)["']?\s*=\s*(\{\s*age\s*=.*)$/
-const TABLE = /^\s*\[/
-const TASK_ENV_TABLE = /^\s*\[\s*tasks\s*\.\s*(?:"[^"]*"|'[^']*'|[\w-]+)\s*\.\s*env\s*\]\s*(?:#.*)?$/
+const BARE_KEY = /^[\w-]+$/
 const ENV_FILE = /^\.?(?:mise|config)\.([\w-]+)(?:\.local)?\.toml$/
 const CANDIDATES: [string, RegExp][] = [
   ['', /^\.?mise(\.[\w-]+)*\.toml$/],
@@ -23,13 +22,13 @@ const BAD_OUTPUT = 'mise env output is not a JSON object of strings'
 
 interface AgeKey {
   name: string
-  value: string
+  value: Record<string, unknown>
   table: 'env' | 'task'
 }
 
 interface AgeFile {
   path: string
-  keys: AgeKey[]
+  keys: AgeKey[] | undefined
 }
 
 interface FileLoad {
@@ -44,8 +43,10 @@ export function miseSource(id: string, listFile: string, env: NodeJS.ProcessEnv)
     load: async ({ cwd, signal, warn }) => {
       const listed = await readList(listFile, env)
       const drift = (await cwdAgeFiles(cwd, env)).filter(({ path }) => !listed.includes(path))
-      for (const { path, keys } of drift)
+      for (const { path, keys } of drift) {
+        if (keys === undefined) continue
         warn(`${path} has age keys missing from ${listFile}: ${keys.map(({ name }) => name).join(', ')}`)
+      }
       const files = [...listed, ...drift.map(({ path }) => path)]
       const outcomes = await Promise.allSettled(files.map((path) => loadFile(id, path, env, signal)))
       const realCwd = await realpath(cwd)
@@ -89,6 +90,7 @@ async function loadFile(
       throw new Error('cannot read file')
     }),
   )
+  if (keys === undefined) throw new Error('not valid TOML')
   const miseEnv = ENV_FILE.exec(basename(path))?.[1]
   const { MISE_ENV: _inherited, ...baseEnv } = env
   const childEnv = miseEnv && miseEnv !== 'local' ? { ...baseEnv, MISE_ENV: miseEnv } : baseEnv
@@ -133,7 +135,7 @@ async function loadTaskKeys(
   const aliases = keys.map((_, index) => `MOTUS_TASK_ENV_${index}`)
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'motus-mise-')))
   try {
-    const lines = keys.map(({ value }, index) => `${aliases[index]} = ${value}\n`)
+    const lines = keys.map(({ value }, index) => `${aliases[index]} = ${inlineToml(value)}\n`)
     await writeFile(join(dir, 'mise.toml'), `[env]\n${lines.join('')}`)
     const values = await miseEnvJson(dir, { ...env, MISE_TRUSTED_CONFIG_PATHS: dir }, signal)
     const secrets: Secret[] = []
@@ -198,25 +200,45 @@ async function cwdAgeFiles(cwd: string, env: NodeJS.ProcessEnv): Promise<AgeFile
       for (const name of names.filter((name) => pattern.test(name) && isActive(name)).sort()) {
         const path = join(dir, sub, name)
         const keys = ageKeys(await readFile(path, 'utf8'))
-        if (keys.length > 0) files.push({ path, keys })
+        if (keys === undefined || keys.length > 0) files.push({ path, keys })
       }
     }
     if (dir === dirname(dir)) return files
   }
 }
 
-function ageKeys(toml: string): AgeKey[] {
-  const keys: AgeKey[] = []
-  let table: AgeKey['table'] = 'env'
-  for (const line of toml.split('\n')) {
-    if (TABLE.test(line)) {
-      table = TASK_ENV_TABLE.test(line) ? 'task' : 'env'
-      continue
-    }
-    const match = AGE_KEY.exec(line)
-    if (match) keys.push({ name: match[1] as string, value: match[2] as string, table })
+function ageKeys(toml: string): AgeKey[] | undefined {
+  let config: Record<string, unknown>
+  try {
+    config = parse(toml)
+  } catch {
+    return undefined
   }
-  return keys
+  const tasks = isTable(config['tasks']) ? Object.values(config['tasks']) : []
+  return [
+    ...envAgeKeys(config['env'], 'env'),
+    ...tasks.flatMap((task) => (isTable(task) ? envAgeKeys(task['env'], 'task') : [])),
+  ]
+}
+
+function envAgeKeys(env: unknown, table: AgeKey['table']): AgeKey[] {
+  const tables = Array.isArray(env) ? env : [env]
+  return tables.filter(isTable).flatMap((entries) =>
+    Object.entries(entries).flatMap(([name, value]) => isTable(value) && 'age' in value ? [{ name, value, table }] : [])
+  )
+}
+
+function isTable(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date)
+}
+
+function inlineToml(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(inlineToml).join(', ')}]`
+  if (!isTable(value)) return typeof value === 'string' ? JSON.stringify(value) : String(value)
+  const entries = Object.entries(value).map(([key, item]) =>
+    `${BARE_KEY.test(key) ? key : JSON.stringify(key)} = ${inlineToml(item)}`
+  )
+  return `{ ${entries.join(', ')} }`
 }
 
 function projectRoot(path: string): string {
