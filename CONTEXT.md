@@ -30,7 +30,13 @@ A source applies to a working directory when that directory's secrets come from 
 All loaded secrets plus their derived forms, held in memory for the session.
 
 **Derived form**:
-Another spelling of a secret's value that output may contain (with or without `0x`, other hex case, inside a URL, percent-encoded, a run of 12 or more characters).
+Another spelling of a secret's value that output may contain (with or without `0x`, other hex case, a secret URL part, percent-encoded, a run of 12 or more characters).
+
+**Secret URL part**:
+A piece of a URL-shaped secret that can carry the secret on its own: a username, password, path segment, query value or `#` part, unless it is ordinary URL text.
+
+**Ordinary URL text**:
+The public pieces of a URL-shaped secret: scheme, host, port, query parameter names, lowercase words such as `ethereum-mainnet` outside the password, and a password equal to the URL's own username or scheme. Redacted only as part of the full URL.
 
 **Vendor prefix**:
 A known key prefix that marks a value as secret even if no source loaded it.

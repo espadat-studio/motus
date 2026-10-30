@@ -43,10 +43,10 @@ describe('createMatcher', () => {
   test('redacts URL path and userinfo parts', () => {
     const { redact } = createMatcher([
       { name: 'RPC_URL', value: 'https://eth.example.test/v2/fixtureRpcKey0001' },
-      { name: 'DATABASE_URL', value: 'postgres://fixtureuser:fixture%40pass@db.example.test/app' },
+      { name: 'DATABASE_URL', value: 'postgres://fixtureuser0001:fixture%40pass@db.example.test/app' },
     ], OPTIONS)
     assert.equal(redact('key fixtureRpcKey0001'), 'key [REDACTED:RPC_URL]')
-    assert.equal(redact('user fixtureuser'), 'user [REDACTED:DATABASE_URL]')
+    assert.equal(redact('user fixtureuser0001'), 'user [REDACTED:DATABASE_URL]')
     assert.equal(redact('pass fixture@pass'), 'pass [REDACTED:DATABASE_URL]')
     assert.equal(redact('pass fixture%40pass'), 'pass [REDACTED:DATABASE_URL]')
     assert.equal(redact('/v2/ path'), '/v2/ path')
@@ -194,12 +194,39 @@ describe('createMatcher', () => {
         assert.equal(redact('user fixtureuser00 end'), 'user [REDACTED:DATABASE_URL] end')
       })
 
-      test('treats a long ordinary path segment as secret, as its exact form already is', () => {
-        const { redact } = createMatcher(
-          [{ name: 'RPC_URL', value: `https://rpc.example.test/ethereum-mainnet/${SECRET}` }],
-          OPTIONS,
-        )
-        assert.equal(redact('ethereum-mainly'), '[REDACTED:RPC_URL]ly')
+      test('leaves lowercase word path segments and usernames alone', () => {
+        const { redact } = createMatcher([
+          { name: 'RPC_URL', value: `https://rpc.example.test/ethereum-mainnet/production_database/${SECRET}` },
+          { name: 'GIT_URL', value: `https://x-access-token:${SECRET}@git.example.test/org/repo` },
+        ], OPTIONS)
+        for (const text of ['ethereum-mainnet', 'ethereum-mainly', 'production_database', 'x-access-token'])
+          assert.equal(redact(text), text)
+      })
+
+      test('still redacts a full URL built from ordinary text', () => {
+        const value = 'https://rpc.example.test/ethereum-mainnet'
+        const { redact } = createMatcher([{ name: 'RPC_URL', value }], OPTIONS)
+        assert.equal(redact(`url ${value} end`), 'url [REDACTED:RPC_URL] end')
+      })
+
+      test('redacts a token held in the username', () => {
+        const value = `https://${SECRET}@git.example.test/org/repo`
+        const { redact } = createMatcher([{ name: 'GIT_URL', value }], OPTIONS)
+        assert.equal(redact(SECRET), '[REDACTED:GIT_URL]')
+      })
+
+      test('redacts a lowercase word password', () => {
+        const value = 'postgres://app:correcthorsebattery@localhost:5432/app'
+        const { redact } = createMatcher([{ name: 'DATABASE_URL', value }], OPTIONS)
+        assert.equal(redact('correcthorsebattery'), '[REDACTED:DATABASE_URL]')
+      })
+
+      test('leaves a password equal to the username or scheme alone', () => {
+        const { redact } = createMatcher([
+          { name: 'SAME_USER', value: 'postgres://fixtureadmin:fixtureadmin@localhost:5432/app' },
+          { name: 'SAME_SCHEME', value: 'postgres://postgres:postgres@localhost:5432/app' },
+        ], OPTIONS)
+        for (const text of ['fixtureadmin', 'the postgres docs']) assert.equal(redact(text), text)
       })
 
       test('leaves scheme, host, port and short path text alone', () => {

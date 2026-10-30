@@ -11,6 +11,7 @@ export interface Matcher {
 const TOKEN_CHAR = 'A-Za-z0-9_-'
 const MIN_PREFIXED_BODY_LENGTH = 8
 const FRAGMENT_LENGTH = 12
+const ORDINARY_URL_TEXT = /^[a-z_-]*$/
 
 export function createMatcher(
   secrets: readonly { name: string; value: string }[],
@@ -74,7 +75,9 @@ function percentEncodedForms(value: string): string[] {
 function urlPartForms(value: string): string[] | undefined {
   const url = URL.parse(value)
   if (!url?.host) return undefined
-  return [url.username, url.password, ...url.pathname.split('/')].flatMap((part) => {
+  const parts = [url.username, ...url.pathname.split('/')].filter((part) => !ORDINARY_URL_TEXT.test(decode(part)))
+  if (![decode(url.username), url.protocol.slice(0, -1)].includes(decode(url.password))) parts.push(url.password)
+  return parts.flatMap((part) => {
     const decoded = decode(part)
     return [part, decoded, ...percentEncodedForms(decoded)]
   })
