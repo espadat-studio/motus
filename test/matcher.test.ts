@@ -116,6 +116,78 @@ describe('createMatcher', () => {
     for (const value of web3) assert.equal(redact(value), value)
   })
 
+  describe('fragments', () => {
+    const SECRET = 'Fx7qLm2Rt9Vw4Kp8Zs3Nb6Hd1Jc5Yg0Ue'
+    const VENDOR_SECRET = 'sk-ant-' + 'api03Fx7qLm2Rt9Vw4Kp8Zs3Nb6Hd1Jc5Yg0UeQa'
+
+    test('redacts prefix, suffix and middle chunks of at least 12 chars', () => {
+      const { redact } = createMatcher([{ name: 'API_TOKEN', value: SECRET }], OPTIONS)
+      for (const chunk of [SECRET.slice(0, 20), SECRET.slice(-20), SECRET.slice(8, 20), SECRET.slice(5, 29)])
+        assert.equal(redact(`out ${chunk} end`), 'out [REDACTED:API_TOKEN] end', chunk)
+    })
+
+    test('redacts the suffix of a vendor-prefixed secret with its name', () => {
+      const { redact } = createMatcher([{ name: 'ANTHROPIC_API_KEY', value: VENDOR_SECRET }], OPTIONS)
+      assert.equal(redact(`k=${VENDOR_SECRET.slice(-20)}`), 'k=[REDACTED:ANTHROPIC_API_KEY]')
+    })
+
+    test('redacts every wrapped line of at least 12 chars', () => {
+      const { redact } = createMatcher([{ name: 'ANTHROPIC_API_KEY', value: VENDOR_SECRET }], OPTIONS)
+      const lines = VENDOR_SECRET.match(/.{1,16}/g) ?? []
+      const expected = lines.map((line) => (line.length >= 12 ? '[REDACTED:ANTHROPIC_API_KEY]' : line))
+      assert.equal(redact(lines.join('\n')), expected.join('\n'))
+      assert.ok(lines.filter((line) => line.length >= 12).length >= 2)
+    })
+
+    test('leaves base64 and reversed values alone (deliberate leaks, out of scope)', () => {
+      const { redact } = createMatcher([{ name: 'API_TOKEN', value: SECRET }], OPTIONS)
+      const base64 = Buffer.from(SECRET).toString('base64')
+      const reversed = [...SECRET].reverse().join('')
+      assert.equal(redact(base64), base64)
+      assert.equal(redact(reversed), reversed)
+    })
+
+    test('leaves text sharing fewer than 12 chars with a secret alone', () => {
+      const { redact } = createMatcher([{ name: 'API_TOKEN', value: SECRET }], OPTIONS)
+      const text = `${SECRET.slice(0, 11)}!${SECRET.slice(11, 22)}`
+      assert.equal(redact(text), text)
+    })
+
+    test('ignores runs that span whitespace inside a secret', () => {
+      const pem = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----'
+      const { redact } = createMatcher([{ name: 'TLS_KEY', value: pem }], OPTIONS)
+      assert.equal(redact('-----BEGIN PRIVATE KEY-----'), '-----BEGIN PRIVATE KEY-----')
+      assert.equal(redact('MIIEvQIBADANBgkq'), '[REDACTED:TLS_KEY]')
+    })
+
+    test('does not fragment URL-shaped secrets', () => {
+      const { redact } = createMatcher(
+        [{ name: 'RPC_URL', value: 'https://eth.example.test/v2/fixtureRpcKey0001' }],
+        OPTIONS,
+      )
+      assert.equal(redact('https://eth.example.test/v3'), 'https://eth.example.test/v3')
+    })
+
+    test('keeps redaction time flat with 80 secrets of 50 chars', () => {
+      const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
+      let seed = 1
+      const nextChar = () => {
+        seed = (seed * 48271) % 2147483647
+        return alphabet[seed % alphabet.length]
+      }
+      const secrets = Array.from({ length: 80 }, (_, index) => ({
+        name: `SECRET_${index}`,
+        value: Array.from({ length: 50 }, nextChar).join(''),
+      }))
+      const { redact } = createMatcher(secrets, OPTIONS)
+      const text = `${'lorem ipsum dolor sit amet '.repeat(40_000)}${secrets[42]?.value.slice(10, 30)}`
+      const start = performance.now()
+      const out = redact(text)
+      assert.ok(out.endsWith('[REDACTED:SECRET_42]'))
+      assert.ok(performance.now() - start < 1000)
+    })
+  })
+
   test('returns input unchanged with an empty value set and no prefixes', () => {
     const { redact } = createMatcher([], { prefixes: [], minValueLength: 8 })
     assert.equal(redact('anything'), 'anything')
