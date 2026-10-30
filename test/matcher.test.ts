@@ -160,12 +160,64 @@ describe('createMatcher', () => {
       assert.equal(redact('MIIEvQIBADANBgkq'), '[REDACTED:TLS_KEY]')
     })
 
-    test('does not fragment URL-shaped secrets', () => {
-      const { redact } = createMatcher(
-        [{ name: 'RPC_URL', value: 'https://eth.example.test/v2/fixtureRpcKey0001' }],
-        OPTIONS,
-      )
-      assert.equal(redact('https://eth.example.test/v3'), 'https://eth.example.test/v3')
+    describe('URL-shaped secrets', () => {
+      const RPC_URL = `https://eth.example.test:8545/v2/${SECRET}`
+      const DATABASE_URL = 'postgres://fixtureuser0001:Qm7%40Zx4Vb9Lk2Wt6Rp8@localhost:5432/app'
+
+      test('redacts a truncated secret-bearing path segment', () => {
+        const { redact } = createMatcher([{ name: 'RPC_URL', value: RPC_URL }], OPTIONS)
+        assert.equal(redact(`out ${SECRET.slice(0, 20)} end`), 'out [REDACTED:RPC_URL] end')
+        assert.equal(redact(RPC_URL.slice(0, -4)), 'https://eth.example.test:8545/v2/[REDACTED:RPC_URL]')
+      })
+
+      test('redacts every wrapped line of a secret-bearing path segment', () => {
+        const { redact } = createMatcher([{ name: 'RPC_URL', value: RPC_URL }], OPTIONS)
+        const lines = SECRET.match(/.{1,16}/g) ?? []
+        const expected = lines.map((line) => (line.length >= 12 ? '[REDACTED:RPC_URL]' : line))
+        assert.equal(redact(lines.join('\n')), expected.join('\n'))
+        assert.ok(lines.filter((line) => line.length >= 12).length >= 2)
+      })
+
+      test('redacts a truncated password in raw, decoded and either percent-encoded case', () => {
+        const { redact } = createMatcher([{ name: 'DATABASE_URL', value: DATABASE_URL }], OPTIONS)
+        for (const chunk of ['Qm7%40Zx4Vb9Lk', 'Qm7@Zx4Vb9Lk'])
+          assert.equal(redact(`pass ${chunk} end`), 'pass [REDACTED:DATABASE_URL] end', chunk)
+        const slashed = createMatcher(
+          [{ name: 'DATABASE_URL', value: 'postgres://fixtureuser0001:Qm7%2FZx4Vb9Lk2Wt6Rp8@localhost:5432/app' }],
+          OPTIONS,
+        )
+        assert.equal(slashed.redact('pass Qm7%2fZx4Vb9Lk2 end'), 'pass [REDACTED:DATABASE_URL] end')
+      })
+
+      test('redacts a truncated username', () => {
+        const { redact } = createMatcher([{ name: 'DATABASE_URL', value: DATABASE_URL }], OPTIONS)
+        assert.equal(redact('user fixtureuser00 end'), 'user [REDACTED:DATABASE_URL] end')
+      })
+
+      test('treats a long ordinary path segment as secret, as its exact form already is', () => {
+        const { redact } = createMatcher(
+          [{ name: 'RPC_URL', value: `https://rpc.example.test/ethereum-mainnet/${SECRET}` }],
+          OPTIONS,
+        )
+        assert.equal(redact('ethereum-mainly'), '[REDACTED:RPC_URL]ly')
+      })
+
+      test('leaves scheme, host, port and short path text alone', () => {
+        const { redact } = createMatcher([
+          { name: 'RPC_URL', value: RPC_URL },
+          { name: 'DATABASE_URL', value: DATABASE_URL },
+        ], OPTIONS)
+        for (
+          const text of [
+            'https://eth.example.test:8545/v3/other',
+            'https://eth.example.test:8545/v2/',
+            'postgres://other@localhost:5432/app',
+            'listening on localhost:5432',
+          ]
+        ) {
+          assert.equal(redact(text), text)
+        }
+      })
     })
 
     test('keeps redaction time flat with 80 secrets of 50 chars', () => {

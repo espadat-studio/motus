@@ -27,8 +27,7 @@ export function createMatcher(
     const forms = derivedForms(value)
     for (const form of forms)
       if (form.length >= minValueLength && !nameByForm.has(form)) nameByForm.set(form, name)
-    if (URL.parse(value)?.host) continue
-    for (const fragment of fragments(forms))
+    for (const fragment of fragments(urlPartForms(value) ?? forms))
       if (!nameByFragment.has(fragment)) nameByFragment.set(fragment, name)
   }
 
@@ -58,17 +57,27 @@ export function createMatcher(
 }
 
 function derivedForms(value: string): string[] {
-  const encoded = encodeURIComponent(value)
-  const forms = [value, encoded, encoded.replace(/%[0-9A-F]{2}/g, (sequence) => sequence.toLowerCase())]
+  const forms = [value, ...percentEncodedForms(value)]
   const hex = /^(?:0x)?([0-9a-fA-F]+)$/.exec(value)?.[1]
   if (hex) {
     for (const digits of [hex, hex.toLowerCase(), hex.toUpperCase()]) forms.push(digits, `0x${digits}`)
   }
-  const url = URL.parse(value)
-  if (url?.host) {
-    for (const part of [url.username, url.password, ...url.pathname.split('/')]) forms.push(part, decode(part))
-  }
+  forms.push(...(urlPartForms(value) ?? []))
   return forms
+}
+
+function percentEncodedForms(value: string): string[] {
+  const encoded = encodeURIComponent(value)
+  return [encoded, encoded.replace(/%[0-9A-F]{2}/g, (sequence) => sequence.toLowerCase())]
+}
+
+function urlPartForms(value: string): string[] | undefined {
+  const url = URL.parse(value)
+  if (!url?.host) return undefined
+  return [url.username, url.password, ...url.pathname.split('/')].flatMap((part) => {
+    const decoded = decode(part)
+    return [part, decoded, ...percentEncodedForms(decoded)]
+  })
 }
 
 function fragments(forms: readonly string[]): string[] {
