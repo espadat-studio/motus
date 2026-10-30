@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmod, mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises'
+import { access, chmod, mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
@@ -9,6 +9,12 @@ import { miseSource } from '../src/sources/mise.ts'
 
 const STUB = `#!/bin/sh
 [ "$1 $2 $3" = "env --json -C" ] || exit 64
+if [ "$MISE_TRUSTED_CONFIG_PATHS" = "$4" ]; then
+  echo "$4" >> "$HOME/temp-dirs"
+  cat "$4/mise.toml" >> "$HOME/temp-configs"
+  grep -q fixture-undecryptable "$4/mise.toml" && exit 1
+  exec awk -F'"' 'BEGIN { printf "{" } /= \\{ age = "fixture-task/ { printf "%s\\"%s\\":\\"plain-%s\\"", sep, substr($1, 1, index($1, " ") - 1), $2; sep = "," } END { print "}" }' "$4/mise.toml"
+fi
 exec cat "$4/mise-stub\${MISE_ENV:+.$MISE_ENV}.json"
 `
 
@@ -144,4 +150,113 @@ describe('miseSource', () => {
     assert.equal(await source.appliesTo({ cwd: join(home, 'plain') }), false)
     assert.equal(await source.appliesTo({ cwd: home }), false)
   })
+
+  test('loads task env age keys through a temporary config next to the [env] ones', async () => {
+    const { home, env } = await fixture({
+      list: '~/t/mise.toml\n',
+      't/mise.toml': [
+        '[env]',
+        'A_TOKEN = { age = "fixture-ciphertext" }',
+        'SHARED = { age = "fixture-ciphertext" }',
+        '[tasks.dev]',
+        'run = "dev"',
+        '[tasks.dev.env]',
+        'DEV_TOKEN = { age = "fixture-task-dev" } # dev',
+        'SHARED = { age = "fixture-task-shared-dev" }',
+        '[tasks."build:all".env]',
+        'SHARED = { age = "fixture-task-shared-build" }',
+        '[tools]',
+        'node = "26"',
+        '',
+      ]
+        .join('\n'),
+      't/mise-stub.json': '{"A_TOKEN":"fixture-a-token-0001","SHARED":"fixture-shared-0001"}',
+    })
+    const secrets = await load(home, env, 't')
+    assert.deepEqual(secrets.map(({ name, value }) => [name, value]), [
+      ['A_TOKEN', 'fixture-a-token-0001'],
+      ['SHARED', 'fixture-shared-0001'],
+      ['DEV_TOKEN', 'plain-fixture-task-dev'],
+      ['SHARED', 'plain-fixture-task-shared-dev'],
+      ['SHARED', 'plain-fixture-task-shared-build'],
+    ])
+    assert.equal(
+      await readFile(join(home, 'temp-configs'), 'utf8'),
+      [
+        '[env]',
+        'MOTUS_TASK_ENV_0 = { age = "fixture-task-dev" } # dev',
+        'MOTUS_TASK_ENV_1 = { age = "fixture-task-shared-dev" }',
+        'MOTUS_TASK_ENV_2 = { age = "fixture-task-shared-build" }',
+        '',
+      ]
+        .join('\n'),
+    )
+    await assertTempDirsGone(home)
+  })
+
+  test('keeps [env] secrets and names each task env key that failed to decrypt', async () => {
+    const { home, env } = await fixture({
+      ...listed,
+      'b/mise.toml': [
+        '[env]',
+        'B_TOKEN = {age="fixture-ciphertext"}',
+        '[tasks.x.env]',
+        'X_TOKEN = { age = "fixture-task-x" }',
+        'Y_TOKEN = { age = "fixture-missing" }',
+        'Z_TOKEN = { age = "fixture-missing" }',
+        '',
+      ]
+        .join('\n'),
+    })
+    const warnings: string[] = []
+    const secrets = await load(home, env, 'plain', warnings)
+    assert.deepEqual(secrets.map(({ name }) => name), ['A_TOKEN', 'PROD_TOKEN', 'B_TOKEN', 'X_TOKEN'])
+    assert.deepEqual(warnings, [
+      `${home}/b/mise.toml failed: cannot decrypt task env keys Y_TOKEN, Z_TOKEN: mise env did not output them`,
+    ])
+    await assertTempDirsGone(home)
+  })
+
+  test('fails with the [env] secrets when task env decryption fails inside the project', async () => {
+    const { home, env } = await fixture({
+      ...listed,
+      'b/mise.toml': [
+        '[env]',
+        'B_TOKEN = {age="fixture-ciphertext"}',
+        '[tasks.x.env]',
+        'X_TOKEN = { age = "fixture-task-x" }',
+        'Y_TOKEN = { age = "fixture-undecryptable" }',
+        '',
+      ]
+        .join('\n'),
+    })
+    await assert.rejects(load(home, env, 'b'), (error: unknown) => {
+      assert.ok(error instanceof PartialLoadError)
+      assert.equal(
+        error.message,
+        `${home}/b/mise.toml failed: cannot decrypt task env keys X_TOKEN, Y_TOKEN: mise env exited with code 1`,
+      )
+      assert.deepEqual(error.secrets.map(({ name }) => name), ['A_TOKEN', 'PROD_TOKEN', 'B_TOKEN'])
+      return true
+    })
+    await assertTempDirsGone(home)
+  })
+
+  test('counts task env age keys toward appliesTo and drift', async () => {
+    const { home, env } = await fixture({
+      ...listed,
+      'c/mise.toml': '[tasks.dev.env]\nC_TOKEN = { age = "fixture-task-c" }\n',
+    })
+    assert.equal(await miseSource('mise', '~/list', env).appliesTo({ cwd: join(home, 'c') }), true)
+    const warnings: string[] = []
+    const secrets = await load(home, env, 'c/sub', warnings)
+    assert.deepEqual(secrets.at(-1), { name: 'C_TOKEN', value: 'plain-fixture-task-c', source: 'mise' })
+    assert.deepEqual(warnings, [`${home}/c/mise.toml has age keys missing from ~/list: C_TOKEN`])
+  })
 })
+
+async function assertTempDirsGone(home: string): Promise<void> {
+  const dirs = (await readFile(join(home, 'temp-dirs'), 'utf8')).trim().split('\n')
+  assert.ok(dirs.length > 0)
+  for (const dir of dirs) await assert.rejects(access(dir), { code: 'ENOENT' })
+}

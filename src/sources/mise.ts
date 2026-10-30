@@ -1,13 +1,16 @@
 import { execFile } from 'node:child_process'
-import { readdir, readFile, realpath } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
 import { PartialLoadError, type Secret, type SecretSource } from '../sources.ts'
 
 const run = promisify(execFile)
-// ponytail: line regex, not a TOML parser; misses age keys in multi-line tables or dotted `env.KEY` form
-const AGE_KEY = /^\s*["']?([A-Za-z_]\w*)["']?\s*=\s*\{\s*age\s*=/gm
+// ponytail: line regex, not a TOML parser; misses age keys in multi-line tables, dotted `env.KEY` form and inline task env
+const AGE_KEY = /^\s*["']?([A-Za-z_]\w*)["']?\s*=\s*(\{\s*age\s*=.*)$/
+const TABLE = /^\s*\[/
+const TASK_ENV_TABLE = /^\s*\[\s*tasks\s*\.\s*(?:"[^"]*"|'[^']*'|[\w-]+)\s*\.\s*env\s*\]\s*(?:#.*)?$/
 const ENV_FILE = /^\.?(?:mise|config)\.([\w-]+)(?:\.local)?\.toml$/
 const CANDIDATES: [string, RegExp][] = [
   ['', /^\.?mise(\.[\w-]+)*\.toml$/],
@@ -18,9 +21,20 @@ const CANDIDATES: [string, RegExp][] = [
 ]
 const BAD_OUTPUT = 'mise env output is not a JSON object of strings'
 
+interface AgeKey {
+  name: string
+  value: string
+  table: 'env' | 'task'
+}
+
 interface AgeFile {
   path: string
-  keys: string[]
+  keys: AgeKey[]
+}
+
+interface FileLoad {
+  secrets: Secret[]
+  errors: string[]
 }
 
 export function miseSource(id: string, listFile: string, env: NodeJS.ProcessEnv): SecretSource {
@@ -30,19 +44,19 @@ export function miseSource(id: string, listFile: string, env: NodeJS.ProcessEnv)
     load: async ({ cwd, signal, warn }) => {
       const listed = await readList(listFile, env)
       const drift = (await cwdAgeFiles(cwd, env)).filter(({ path }) => !listed.includes(path))
-      for (const { path, keys } of drift) warn(`${path} has age keys missing from ${listFile}: ${keys.join(', ')}`)
+      for (const { path, keys } of drift)
+        warn(`${path} has age keys missing from ${listFile}: ${keys.map(({ name }) => name).join(', ')}`)
       const files = [...listed, ...drift.map(({ path }) => path)]
       const outcomes = await Promise.allSettled(files.map((path) => loadFile(id, path, env, signal)))
       const realCwd = await realpath(cwd)
       const secrets: Secret[] = []
       const failures: string[] = []
       for (const [index, outcome] of outcomes.entries()) {
-        if (outcome.status === 'fulfilled') {
-          secrets.push(...outcome.value)
-          continue
-        }
         const path = files[index] as string
-        const message = `${path} failed: ${reasonOf(outcome.reason)}`
+        if (outcome.status === 'fulfilled') secrets.push(...outcome.value.secrets)
+        const errors = outcome.status === 'fulfilled' ? outcome.value.errors : [reasonOf(outcome.reason)]
+        if (errors.length === 0) continue
+        const message = `${path} failed: ${errors.join('; ')}`
         if (covers(projectRoot(path), realCwd)) failures.push(message)
         else warn(message)
       }
@@ -69,7 +83,7 @@ async function loadFile(
   path: string,
   env: NodeJS.ProcessEnv,
   signal: AbortSignal,
-): Promise<Secret[]> {
+): Promise<FileLoad> {
   const keys = ageKeys(
     await readFile(path, 'utf8').catch(() => {
       throw new Error('cannot read file')
@@ -78,8 +92,73 @@ async function loadFile(
   const miseEnv = ENV_FILE.exec(basename(path))?.[1]
   const { MISE_ENV: _inherited, ...baseEnv } = env
   const childEnv = miseEnv && miseEnv !== 'local' ? { ...baseEnv, MISE_ENV: miseEnv } : baseEnv
-  const { stdout } = await run('mise', ['env', '--json', '-C', projectRoot(path)], {
-    env: childEnv,
+  const envKeys = keys.filter(({ table }) => table === 'env')
+  const taskKeys = keys.filter(({ table }) => table === 'task')
+  const [fromEnv, fromTasks] = await Promise.all([
+    loadEnvKeys(id, envKeys, projectRoot(path), childEnv, signal).then(
+      (secrets) => ({ secrets, errors: [] }),
+      (error: unknown) => ({ secrets: [], errors: [reasonOf(error)] }),
+    ),
+    loadTaskKeys(id, taskKeys, childEnv, signal),
+  ])
+  return {
+    secrets: [...fromEnv.secrets, ...fromTasks.secrets],
+    errors: [...fromEnv.errors, ...fromTasks.errors],
+  }
+}
+
+async function loadEnvKeys(
+  id: string,
+  keys: AgeKey[],
+  root: string,
+  env: NodeJS.ProcessEnv,
+  signal: AbortSignal,
+): Promise<Secret[]> {
+  if (keys.length === 0) return []
+  const values = await miseEnvJson(root, env, signal)
+  return keys.flatMap(({ name }) => {
+    const value = values[name]
+    if (value === undefined) throw new Error(`mise env did not output ${name}`)
+    return value ? [{ name, value, source: id }] : []
+  })
+}
+
+async function loadTaskKeys(
+  id: string,
+  keys: AgeKey[],
+  env: NodeJS.ProcessEnv,
+  signal: AbortSignal,
+): Promise<FileLoad> {
+  if (keys.length === 0) return { secrets: [], errors: [] }
+  const aliases = keys.map((_, index) => `MOTUS_TASK_ENV_${index}`)
+  const dir = await realpath(await mkdtemp(join(tmpdir(), 'motus-mise-')))
+  try {
+    const lines = keys.map(({ value }, index) => `${aliases[index]} = ${value}\n`)
+    await writeFile(join(dir, 'mise.toml'), `[env]\n${lines.join('')}`)
+    const values = await miseEnvJson(dir, { ...env, MISE_TRUSTED_CONFIG_PATHS: dir }, signal)
+    const secrets: Secret[] = []
+    const missing: string[] = []
+    for (const [index, { name }] of keys.entries()) {
+      const value = values[aliases[index] as string]
+      if (value === undefined) missing.push(name)
+      else if (value) secrets.push({ name, value, source: id })
+    }
+    const errors = missing.length > 0 ? [taskError(missing, 'mise env did not output them')] : []
+    return { secrets, errors }
+  } catch (error) {
+    return { secrets: [], errors: [taskError(keys.map(({ name }) => name), reasonOf(error))] }
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}
+
+function taskError(names: string[], reason: string): string {
+  return `cannot decrypt task env keys ${names.join(', ')}: ${reason}`
+}
+
+async function miseEnvJson(dir: string, env: NodeJS.ProcessEnv, signal: AbortSignal): Promise<Record<string, string>> {
+  const { stdout } = await run('mise', ['env', '--json', '-C', dir], {
+    env,
     signal,
     maxBuffer: 16 * 1024 * 1024,
   })
@@ -88,12 +167,7 @@ async function loadFile(
         typeof error.code === 'number' ? `mise env exited with code ${error.code}` : 'mise env failed to run',
       )
     })
-  const values = parseOutput(stdout)
-  return keys.flatMap((name) => {
-    const value = values[name]
-    if (value === undefined) throw new Error(`mise env did not output ${name}`)
-    return value ? [{ name, value, source: id }] : []
-  })
+  return parseOutput(stdout)
 }
 
 function parseOutput(stdout: string): Record<string, string> {
@@ -131,8 +205,18 @@ async function cwdAgeFiles(cwd: string, env: NodeJS.ProcessEnv): Promise<AgeFile
   }
 }
 
-function ageKeys(toml: string): string[] {
-  return [...toml.matchAll(AGE_KEY)].map((match) => match[1] as string)
+function ageKeys(toml: string): AgeKey[] {
+  const keys: AgeKey[] = []
+  let table: AgeKey['table'] = 'env'
+  for (const line of toml.split('\n')) {
+    if (TABLE.test(line)) {
+      table = TASK_ENV_TABLE.test(line) ? 'task' : 'env'
+      continue
+    }
+    const match = AGE_KEY.exec(line)
+    if (match) keys.push({ name: match[1] as string, value: match[2] as string, table })
+  }
+  return keys
 }
 
 function projectRoot(path: string): string {
