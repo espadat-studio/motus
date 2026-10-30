@@ -184,7 +184,7 @@ describe('miseSource', () => {
       await readFile(join(home, 'temp-configs'), 'utf8'),
       [
         '[env]',
-        'MOTUS_TASK_ENV_0 = { age = "fixture-task-dev" } # dev',
+        'MOTUS_TASK_ENV_0 = { age = "fixture-task-dev" }',
         'MOTUS_TASK_ENV_1 = { age = "fixture-task-shared-dev" }',
         'MOTUS_TASK_ENV_2 = { age = "fixture-task-shared-build" }',
         '',
@@ -252,6 +252,67 @@ describe('miseSource', () => {
     const secrets = await load(home, env, 'c/sub', warnings)
     assert.deepEqual(secrets.at(-1), { name: 'C_TOKEN', value: 'plain-fixture-task-c', source: 'mise' })
     assert.deepEqual(warnings, [`${home}/c/mise.toml has age keys missing from ~/list: C_TOKEN`])
+  })
+
+  test('loads dotted, multi-line and inline age keys of [env] and task env', async () => {
+    const { home, env } = await fixture({
+      list: '~/i/mise.toml\n',
+      'i/mise.toml': [
+        'env.DOTTED = { age = "fixture-ciphertext" }',
+        'env.PLAIN = "visible"',
+        'env.MULTI = { age = """',
+        'fixture-ciphertext',
+        '""" }',
+        '[tasks.dev]',
+        'env = { DEV_TOKEN = { age = "fixture-task-dev" }, PLAIN = "visible" }',
+        '[tasks.build]',
+        'env.BUILD_TOKEN = { age = "fixture-task-build" }',
+        '',
+      ]
+        .join('\n'),
+      'i/mise-stub.json': '{"DOTTED":"fixture-dotted-0001","MULTI":"fixture-multi-0001","PLAIN":"visible"}',
+    })
+    const secrets = await load(home, env, 'i')
+    assert.deepEqual(secrets.map(({ name, value }) => [name, value]), [
+      ['DOTTED', 'fixture-dotted-0001'],
+      ['MULTI', 'fixture-multi-0001'],
+      ['DEV_TOKEN', 'plain-fixture-task-dev'],
+      ['BUILD_TOKEN', 'plain-fixture-task-build'],
+    ])
+    assert.equal(
+      await readFile(join(home, 'temp-configs'), 'utf8'),
+      [
+        '[env]',
+        'MOTUS_TASK_ENV_0 = { age = "fixture-task-dev" }',
+        'MOTUS_TASK_ENV_1 = { age = "fixture-task-build" }',
+        '',
+      ]
+        .join('\n'),
+    )
+  })
+
+  test('fails a config that is not TOML and loads the rest', async () => {
+    const { home, env } = await fixture({
+      ...listed,
+      'b/mise.toml': '[env\nB_TOKEN = { age = "fixture-ciphertext" }\n',
+    })
+    const warnings: string[] = []
+    const secrets = await load(home, env, 'plain', warnings)
+    assert.deepEqual(secrets.map(({ name }) => name), ['A_TOKEN', 'PROD_TOKEN'])
+    assert.deepEqual(warnings, [`${home}/b/mise.toml failed: not valid TOML`])
+  })
+
+  test('applies to and fails a cwd config that is not TOML', async () => {
+    const { home, env } = await fixture({ ...listed, 'c/mise.toml': 'not = = toml\n' })
+    assert.equal(await miseSource('mise', '~/list', env).appliesTo({ cwd: join(home, 'c') }), true)
+    const warnings: string[] = []
+    await assert.rejects(load(home, env, 'c/sub', warnings), (error: unknown) => {
+      assert.ok(error instanceof PartialLoadError)
+      assert.equal(error.message, `${home}/c/mise.toml failed: not valid TOML`)
+      assert.deepEqual(error.secrets.map(({ name }) => name), ['A_TOKEN', 'PROD_TOKEN', 'B_TOKEN'])
+      return true
+    })
+    assert.deepEqual(warnings, [])
   })
 })
 
