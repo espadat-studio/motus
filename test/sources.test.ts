@@ -35,6 +35,16 @@ describe('envSource', () => {
     assert.ok(secrets.every(({ source }) => source === 'env'))
   })
 
+  test('loads mise state blobs, which can hold secret values', async () => {
+    const env = {
+      __MISE_DIFF: 'eAFrWWJmZml4eGZmZml4',
+      __MISE_SESSION: 'eAHqWWJmZml4eGZmZml4',
+      __MISE_ORIG_PATH: '/usr/bin',
+    }
+    const secrets = await envSource(env).load(ctx)
+    assert.deepEqual(secrets.map(({ name }) => name).sort(), ['__MISE_DIFF', '__MISE_SESSION'])
+  })
+
   test('skips gum styling vars', async () => {
     const env = { GUM_LOG_KEY_FOREGROUND: '#ff0000', GUM_LOG_KEY_BACKGROUND: '#000000' }
     assert.deepEqual(await envSource(env).load(ctx), [])
