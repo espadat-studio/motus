@@ -15,7 +15,7 @@ A source loads named secrets when the session starts. motus keeps the values in 
 
 ## env
 
-On by default, and it can't fail. It picks variables whose names contain `KEY`, `TOKEN`, `SECRET`, `PASS`, `PRIVATE`, `MNEMONIC`, `DATABASE_URL`, `AUTH`, `CREDENTIAL` or `DSN`. A short denylist skips noise such as `SSH_AUTH_SOCK` and `GUM_*`. A `DATABASE_URL` that has a host but no user, password or query is not secret and is skipped.
+On by default, and it can't fail. It picks variables whose names contain `KEY`, `TOKEN`, `SECRET`, `PASS`, `PRIVATE`, `MNEMONIC`, `DATABASE_URL`, `AUTH`, `CREDENTIAL` or `DSN`. A short denylist skips noise such as `SSH_AUTH_SOCK` and `GUM_*`. A `DATABASE_URL` that has a host but no user, password or query is not secret and is skipped. It always loads `__MISE_DIFF` and `__MISE_SESSION`, the state [mise](https://mise.jdx.dev) keeps in the shell env: older mise versions store your env values there in plain text.
 
 ## command
 

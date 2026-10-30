@@ -18,7 +18,7 @@ type Handler = (event: Record<string, unknown>, ctx: unknown) => unknown
 const homes: string[] = []
 after(() => Promise.all(homes.map((home) => rm(home, { recursive: true, force: true }))))
 
-async function setup(config: unknown = {}) {
+async function setup(config: unknown = {}, extraEnv: Record<string, string> = {}) {
   const home = await mkdtemp(join(tmpdir(), 'motus-'))
   homes.push(home)
   await mkdir(join(home, 'vault'))
@@ -38,7 +38,7 @@ async function setup(config: unknown = {}) {
     signal: undefined,
     ui: { notify: (message: string, type?: string) => notes.push({ message, type }) },
   }
-  createMotus({ configPath, env: { HOME: home, API_TOKEN: TOKEN } })(pi as unknown as ExtensionAPI)
+  createMotus({ configPath, env: { HOME: home, API_TOKEN: TOKEN, ...extraEnv } })(pi as unknown as ExtensionAPI)
   const emit = (name: string, event: Record<string, unknown> = {}) => {
     const handler = handlers.get(name)
     assert.ok(handler, `no ${name} handler`)
@@ -160,6 +160,26 @@ describe('redaction', () => {
       content: [{ type: 'text', text: 't=[REDACTED:API_TOKEN]' }],
       structuredContent: { value: '[REDACTED:API_TOKEN]' },
       details: { diff: '+[REDACTED:API_TOKEN]' },
+    })
+  })
+
+  test('tool_result redacts mise state blobs in an env dump', async () => {
+    const blobs = { __MISE_DIFF: 'eAFrWWJmZml4eGZmZml4dGRkY2', __MISE_SESSION: 'eAHqWWJmZml4eGZmZml4dGRkY2' }
+    const { emit } = await setup({}, blobs)
+    const dump = Object.entries({ PATH: '/usr/bin', API_TOKEN: TOKEN, ...blobs }).map(([k, v]) => `${k}=${v}`)
+    const result = await emit('tool_result', { content: [{ type: 'text', text: dump.join('\n') }], details: {} })
+    assert.deepEqual(result, {
+      content: [{
+        type: 'text',
+        text: [
+          'PATH=/usr/bin',
+          'API_TOKEN=[REDACTED:API_TOKEN]',
+          '__MISE_DIFF=[REDACTED:__MISE_DIFF]',
+          '__MISE_SESSION=[REDACTED:__MISE_SESSION]',
+        ]
+          .join('\n'),
+      }],
+      details: {},
     })
   })
 
