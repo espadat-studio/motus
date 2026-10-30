@@ -194,6 +194,30 @@ describe('createMatcher', () => {
         assert.equal(redact('user fixtureuser00 end'), 'user [REDACTED:DATABASE_URL] end')
       })
 
+      test('redacts query values and # parts, whole or truncated', () => {
+        const { redact } = createMatcher([
+          { name: 'QUERY_URL', value: `https://lb.example.test/ogrpc?network=ethereum&dkey=${SECRET}` },
+          { name: 'HASH_URL', value: 'https://app.example.test/start#Qm7Zx4Vb9Lk2Wt6Rp8' },
+        ], OPTIONS)
+        assert.equal(redact(`dkey=${SECRET}`), 'dkey=[REDACTED:QUERY_URL]')
+        assert.equal(redact(`out ${SECRET.slice(4, 24)} end`), 'out [REDACTED:QUERY_URL] end')
+        assert.equal(redact('out Qm7Zx4Vb9Lk2Wt end'), 'out [REDACTED:HASH_URL] end')
+      })
+
+      test('redacts a query value in raw and decoded spellings', () => {
+        const value = 'https://lb.example.test/rpc?token=Qm7+Zx4Vb9%2FLk2Wt6Rp8'
+        const { redact } = createMatcher([{ name: 'RPC_URL', value }], OPTIONS)
+        for (const text of ['Qm7+Zx4Vb9%2FLk2Wt6Rp8', 'Qm7+Zx4Vb9/Lk2Wt6Rp8', 'Qm7+Zx4Vb9%2fLk2Wt6Rp8'])
+          assert.equal(redact(text), '[REDACTED:RPC_URL]', text)
+      })
+
+      test('leaves parameter names and lowercase word query values alone', () => {
+        const value = `https://lb.example.test/ogrpc?network=ethereum&sslmode=verify-full&dkey=${SECRET}`
+        const { redact } = createMatcher([{ name: 'RPC_URL', value }], OPTIONS)
+        for (const text of ['network=ethereum', 'sslmode=verify-full', 'ogrpc?network'])
+          assert.equal(redact(text), text)
+      })
+
       test('leaves lowercase word path segments and usernames alone', () => {
         const { redact } = createMatcher([
           { name: 'RPC_URL', value: `https://rpc.example.test/ethereum-mainnet/production_database/${SECRET}` },

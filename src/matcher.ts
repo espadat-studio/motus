@@ -69,17 +69,27 @@ function derivedForms(value: string): string[] {
 
 function percentEncodedForms(value: string): string[] {
   const encoded = encodeURIComponent(value)
-  return [encoded, encoded.replace(/%[0-9A-F]{2}/g, (sequence) => sequence.toLowerCase())]
+  return [encoded, lowercaseEscapes(encoded)]
+}
+
+function lowercaseEscapes(text: string): string {
+  return text.replace(/%[0-9A-F]{2}/g, (sequence) => sequence.toLowerCase())
 }
 
 function urlPartForms(value: string): string[] | undefined {
   const url = URL.parse(value)
   if (!url?.host) return undefined
-  const parts = [url.username, ...url.pathname.split('/')].filter((part) => !ORDINARY_URL_TEXT.test(decode(part)))
+  const parts = [
+    url.username,
+    ...url.pathname.split('/'),
+    ...url.search.slice(1).split('&').map((pair) => pair.slice(pair.indexOf('=') + 1)),
+    url.hash.slice(1),
+  ]
+    .filter((part) => !ORDINARY_URL_TEXT.test(decode(part)))
   if (![decode(url.username), url.protocol.slice(0, -1)].includes(decode(url.password))) parts.push(url.password)
   return parts.flatMap((part) => {
     const decoded = decode(part)
-    return [part, decoded, ...percentEncodedForms(decoded)]
+    return [part, lowercaseEscapes(part), decoded, ...percentEncodedForms(decoded)]
   })
 }
 
