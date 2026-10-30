@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -18,6 +18,9 @@ const CANDIDATES: [string, RegExp][] = [
   ['mise', /^config(\.[\w-]+)*\.toml$/],
   ['.config/mise', /^config(\.[\w-]+)*\.toml$/],
 ]
+const TASK_DIRS = ['mise-tasks', '.mise-tasks', 'mise/tasks', '.mise/tasks', '.config/mise/tasks']
+const TASK_HEADER = /^#\s*(?:MISE|\[MISE\]) (.*)$/
+const TASK_ENV_ENTRY = /^\s*env\s*[.=]/
 const BAD_OUTPUT = 'mise env output is not a JSON object of strings'
 
 interface AgeKey {
@@ -31,6 +34,10 @@ interface AgeFile {
   keys: AgeKey[] | undefined
 }
 
+interface TaskFile extends AgeFile {
+  root: string
+}
+
 interface FileLoad {
   secrets: Secret[]
   errors: string[]
@@ -39,7 +46,8 @@ interface FileLoad {
 export function miseSource(id: string, listFile: string, env: NodeJS.ProcessEnv): SecretSource {
   return {
     id,
-    appliesTo: async ({ cwd }) => (await cwdAgeFiles(cwd, env)).length > 0,
+    appliesTo: async ({ cwd }) =>
+      (await cwdAgeFiles(cwd, env)).length > 0 || (await taskFiles(await ancestors(cwd))).length > 0,
     load: async ({ cwd, signal, warn }) => {
       const listed = await readList(listFile, env)
       const drift = (await cwdAgeFiles(cwd, env)).filter(({ path }) => !listed.includes(path))
@@ -48,17 +56,23 @@ export function miseSource(id: string, listFile: string, env: NodeJS.ProcessEnv)
         warn(`${path} has age keys missing from ${listFile}: ${keys.map(({ name }) => name).join(', ')}`)
       }
       const files = [...listed, ...drift.map(({ path }) => path)]
-      const outcomes = await Promise.allSettled(files.map((path) => loadFile(id, path, env, signal)))
       const realCwd = await realpath(cwd)
+      const tasks = await taskFiles([...new Set([...await ancestors(realCwd), ...files.map(projectRoot)])])
+      const { MISE_ENV: _inherited, ...baseEnv } = env
+      const loads = [
+        ...files.map((path) => ({ path, root: projectRoot(path), load: loadFile(id, path, env, signal) })),
+        ...tasks.map(({ path, root, keys }) => ({ path, root, load: loadTaskFile(id, keys, baseEnv, signal) })),
+      ]
+      const outcomes = await Promise.allSettled(loads.map(({ load }) => load))
       const secrets: Secret[] = []
       const failures: string[] = []
       for (const [index, outcome] of outcomes.entries()) {
-        const path = files[index] as string
+        const { path, root } = loads[index] as (typeof loads)[number]
         if (outcome.status === 'fulfilled') secrets.push(...outcome.value.secrets)
         const errors = outcome.status === 'fulfilled' ? outcome.value.errors : [reasonOf(outcome.reason)]
         if (errors.length === 0) continue
         const message = `${path} failed: ${errors.join('; ')}`
-        if (covers(projectRoot(path), realCwd)) failures.push(message)
+        if (covers(root, realCwd)) failures.push(message)
         else warn(message)
       }
       if (failures.length > 0) throw new PartialLoadError(failures.join('; '), secrets)
@@ -107,6 +121,16 @@ async function loadFile(
     secrets: [...fromEnv.secrets, ...fromTasks.secrets],
     errors: [...fromEnv.errors, ...fromTasks.errors],
   }
+}
+
+async function loadTaskFile(
+  id: string,
+  keys: AgeKey[] | undefined,
+  env: NodeJS.ProcessEnv,
+  signal: AbortSignal,
+): Promise<FileLoad> {
+  if (keys === undefined) throw new Error('#MISE env header is not valid TOML')
+  return loadTaskKeys(id, keys, env, signal)
 }
 
 async function loadEnvKeys(
@@ -204,6 +228,55 @@ async function cwdAgeFiles(cwd: string, env: NodeJS.ProcessEnv): Promise<AgeFile
       }
     }
     if (dir === dirname(dir)) return files
+  }
+}
+
+async function ancestors(cwd: string): Promise<string[]> {
+  const dirs: string[] = []
+  for (let dir = await realpath(cwd);; dir = dirname(dir)) {
+    dirs.push(dir)
+    if (dir === dirname(dir)) return dirs
+  }
+}
+
+async function taskFiles(roots: string[]): Promise<TaskFile[]> {
+  const files: TaskFile[] = []
+  for (const root of roots) {
+    for (const dir of TASK_DIRS) {
+      for (const path of await taskScripts(join(root, dir))) {
+        const keys = headerAgeKeys(await readFile(path, 'utf8'))
+        if (keys === undefined || keys.length > 0) files.push({ path, root, keys })
+      }
+    }
+  }
+  return files
+}
+
+async function taskScripts(dir: string): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true }).catch((error: { code?: unknown }) => {
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return []
+    throw error
+  })
+  const scripts: string[] = []
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (entry.name.startsWith('.')) continue
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) scripts.push(...await taskScripts(path))
+    else if (entry.isFile() || (entry.isSymbolicLink() && (await stat(path).catch(() => undefined))?.isFile()))
+      scripts.push(path)
+  }
+  return scripts
+}
+
+function headerAgeKeys(script: string): AgeKey[] | undefined {
+  const entries = script.split('\n').flatMap((line) => {
+    const content = TASK_HEADER.exec(line)?.[1]
+    return content !== undefined && TASK_ENV_ENTRY.test(content) ? [content] : []
+  })
+  try {
+    return entries.flatMap((entry) => envAgeKeys(parse(entry)['env'], 'task'))
+  } catch {
+    return undefined
   }
 }
 

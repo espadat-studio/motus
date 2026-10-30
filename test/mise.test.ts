@@ -316,6 +316,101 @@ describe('miseSource', () => {
   })
 })
 
+describe('miseSource file tasks', () => {
+  const taskDirs = ['mise-tasks', '.mise-tasks', 'mise/tasks', '.mise/tasks', '.config/mise/tasks']
+
+  test('loads #MISE and # [MISE] env age keys of every default task dir', async () => {
+    const { home, env } = await fixture({
+      ...listed,
+      ...Object.fromEntries(
+        taskDirs.map((dir, index) => [
+          `b/${dir}/nested/t${index}`,
+          `#!/bin/sh
+#MISE env={T${index}={age="fixture-task-${index}"}}
+`,
+        ]),
+      ),
+      'b/mise-tasks/bracket': [
+        '#!/bin/sh',
+        '#MISE description="bracket"',
+        '# [MISE] env.BRACKET = { age = "fixture-task-bracket" }',
+        '#MISE env={PLAIN="visible"}',
+        '#USAGE flag "--x"',
+        'echo hi',
+        '',
+      ]
+        .join('\n'),
+      'b/mise-tasks/.hidden': '#MISE env={HIDDEN={age="fixture-task-hidden"}}\n',
+      'b/mise-tasks/plain': '#!/bin/sh\n#MISE env={PLAIN="visible"}\n',
+    })
+    const warnings: string[] = []
+    const secrets = await load(home, env, 'plain', warnings)
+    assert.deepEqual(secrets.map(({ name, value }) => [name, value]), [
+      ['A_TOKEN', 'fixture-a-token-0001'],
+      ['PROD_TOKEN', 'fixture-prod-token-0001'],
+      ['B_TOKEN', 'fixture-b-token-0001'],
+      ['BRACKET', 'plain-fixture-task-bracket'],
+      ['T0', 'plain-fixture-task-0'],
+      ['T1', 'plain-fixture-task-1'],
+      ['T2', 'plain-fixture-task-2'],
+      ['T3', 'plain-fixture-task-3'],
+      ['T4', 'plain-fixture-task-4'],
+    ])
+    assert.deepEqual(warnings, [])
+    await assertTempDirsGone(home)
+  })
+
+  test('names a failed file-task key, keeps the rest and warns outside the project', async () => {
+    const { home, env } = await fixture({
+      ...listed,
+      'b/.mise/tasks/deploy': '#MISE env={D_TOKEN={age="fixture-missing"}}\n',
+    })
+    const warnings: string[] = []
+    const secrets = await load(home, env, 'plain', warnings)
+    assert.deepEqual(secrets.map(({ name }) => name), ['A_TOKEN', 'PROD_TOKEN', 'B_TOKEN'])
+    assert.deepEqual(warnings, [
+      `${home}/b/.mise/tasks/deploy failed: cannot decrypt task env keys D_TOKEN: mise env did not output them`,
+    ])
+  })
+
+  test('fails with the loaded secrets when a file task inside the project fails', async () => {
+    const { home, env } = await fixture({
+      ...listed,
+      'c/mise-tasks/deploy': '#MISE env={D_TOKEN={age="fixture-undecryptable"}}\n',
+      'c/mise-tasks/bad': '#MISE env={X=\n',
+    })
+    const warnings: string[] = []
+    await assert.rejects(load(home, env, 'c/sub', warnings), (error: unknown) => {
+      assert.ok(error instanceof PartialLoadError)
+      assert.equal(
+        error.message,
+        [
+          `${home}/c/mise-tasks/bad failed: #MISE env header is not valid TOML`,
+          `${home}/c/mise-tasks/deploy failed: cannot decrypt task env keys D_TOKEN: mise env exited with code 1`,
+        ]
+          .join('; '),
+      )
+      assert.deepEqual(error.secrets.map(({ name }) => name), ['A_TOKEN', 'PROD_TOKEN', 'B_TOKEN'])
+      return true
+    })
+    assert.deepEqual(warnings, [])
+    await assertTempDirsGone(home)
+  })
+
+  test('applies to a project with only file-task age keys, without drift', async () => {
+    const { home, env } = await fixture({
+      ...listed,
+      'c/.config/mise/tasks/dev': '# [MISE] env={C_TOKEN={age="fixture-task-c"}}\n',
+    })
+    assert.equal(await miseSource('mise', '~/list', env).appliesTo({ cwd: join(home, 'c/sub') }), true)
+    assert.equal(await miseSource('mise', '~/list', env).appliesTo({ cwd: join(home, 'plain') }), false)
+    const warnings: string[] = []
+    const secrets = await load(home, env, 'c/sub', warnings)
+    assert.deepEqual(secrets.at(-1), { name: 'C_TOKEN', value: 'plain-fixture-task-c', source: 'mise' })
+    assert.deepEqual(warnings, [])
+  })
+})
+
 async function assertTempDirsGone(home: string): Promise<void> {
   const dirs = (await readFile(join(home, 'temp-dirs'), 'utf8')).trim().split('\n')
   assert.ok(dirs.length > 0)
