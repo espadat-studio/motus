@@ -73,11 +73,11 @@ Verified in pi 1.4.0 source: `tool_result` changes reach the `toolResult` messag
 - Derived forms are generated in the core, not the adapters:
   - hex with and without `0x`
   - lowercase and uppercase hex variants
-  - the userinfo and path parts of URLs (Alchemy/dRPC RPC URLs carry the key in the path)
+  - the secret parts of URLs: the password, plus usernames, path segments, query values and `#` parts that are not ordinary URL text (ADR-0003). Alchemy/dRPC RPC URLs carry the key in the path
   - percent-encoded values (`DATABASE_URL` passwords with `@`, `/`, `+`)
-  - fragments: any run of 12 or more characters from a non-URL secret, never crossing whitespace (ADR-0002). Catches `head -c`, `cut -c`, `tail -c`, `fold` and wrapped output
+  - fragments: any run of 12 or more characters from a secret, never crossing whitespace (ADR-0002). For a URL, only from its secret parts, each taken alone. Catches `head -c`, `cut -c`, `tail -c`, `fold` and wrapped output
 - JSON escaping is handled by walking strings, not by derived forms.
-- Not covered: base64, reversed values, chunks shorter than 12 characters, fragments of URL-shaped secrets.
+- Not covered: base64, reversed values, chunks shorter than 12 characters, ordinary URL text on its own.
 - Vendor prefixes catch keys that were never loaded.
 
 ### Blocking

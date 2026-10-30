@@ -11,6 +11,7 @@ export interface Matcher {
 const TOKEN_CHAR = 'A-Za-z0-9_-'
 const MIN_PREFIXED_BODY_LENGTH = 8
 const FRAGMENT_LENGTH = 12
+const ORDINARY_URL_TEXT = /^[a-z_-]*$/
 
 export function createMatcher(
   secrets: readonly { name: string; value: string }[],
@@ -27,8 +28,7 @@ export function createMatcher(
     const forms = derivedForms(value)
     for (const form of forms)
       if (form.length >= minValueLength && !nameByForm.has(form)) nameByForm.set(form, name)
-    if (URL.parse(value)?.host) continue
-    for (const fragment of fragments(forms))
+    for (const fragment of fragments(urlPartForms(value) ?? forms))
       if (!nameByFragment.has(fragment)) nameByFragment.set(fragment, name)
   }
 
@@ -58,17 +58,39 @@ export function createMatcher(
 }
 
 function derivedForms(value: string): string[] {
-  const encoded = encodeURIComponent(value)
-  const forms = [value, encoded, encoded.replace(/%[0-9A-F]{2}/g, (sequence) => sequence.toLowerCase())]
+  const forms = [value, ...percentEncodedForms(value)]
   const hex = /^(?:0x)?([0-9a-fA-F]+)$/.exec(value)?.[1]
   if (hex) {
     for (const digits of [hex, hex.toLowerCase(), hex.toUpperCase()]) forms.push(digits, `0x${digits}`)
   }
-  const url = URL.parse(value)
-  if (url?.host) {
-    for (const part of [url.username, url.password, ...url.pathname.split('/')]) forms.push(part, decode(part))
-  }
+  forms.push(...(urlPartForms(value) ?? []))
   return forms
+}
+
+function percentEncodedForms(value: string): string[] {
+  const encoded = encodeURIComponent(value)
+  return [encoded, lowercaseEscapes(encoded)]
+}
+
+function lowercaseEscapes(text: string): string {
+  return text.replace(/%[0-9A-F]{2}/g, (sequence) => sequence.toLowerCase())
+}
+
+function urlPartForms(value: string): string[] | undefined {
+  const url = URL.parse(value)
+  if (!url?.host) return undefined
+  const parts = [
+    url.username,
+    ...url.pathname.split('/'),
+    ...url.search.slice(1).split('&').map((pair) => pair.slice(pair.indexOf('=') + 1)),
+    url.hash.slice(1),
+  ]
+    .filter((part) => !ORDINARY_URL_TEXT.test(decode(part)))
+  if (![decode(url.username), url.protocol.slice(0, -1)].includes(decode(url.password))) parts.push(url.password)
+  return parts.flatMap((part) => {
+    const decoded = decode(part)
+    return [part, lowercaseEscapes(part), decoded, ...percentEncodedForms(decoded)]
+  })
 }
 
 function fragments(forms: readonly string[]): string[] {

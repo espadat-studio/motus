@@ -13,7 +13,7 @@ Child processes keep inheriting your environment. Stripping secrets from it woul
 
 - Base64 and reversed values.
 - Chunks shorter than 12 characters, such as the last line of a wrapped secret. Longer chunks are redacted.
-- Fragments of URL-shaped secrets. Their full value and key parts are still redacted.
+- Lowercase word path segments, usernames, query values and `#` parts on their own, such as `ethereum-mainnet` or `/hooks/correct-horse-battery`. The full URL is still redacted, so don't rely on a lowercase slug as a secret.
 - Values shorter than `minValueLength` (8 by default).
 - Secrets no source loaded and no vendor prefix covers.
 - [pi](https://github.com/earendil-works/pi) keeps bash output in `/tmp/pi-bash-*` and in streaming updates. Neither reaches the model unredacted.
