@@ -16,6 +16,10 @@ _Avoid_: provider, backend
 A password manager's collection of entries, unlocked by one identity (a YubiKey, a TPM). A source reads one store.
 _Avoid_: vault (1Password's own word), repo
 
+**Task env**:
+Secrets a mise config gives one task only while it runs, kept out of the shell env. Still secrets: task output can print them.
+_Avoid_: task secrets, run env
+
 **Required source**:
 A source whose failure, in a repo it applies to, puts the session in the degraded state.
 
