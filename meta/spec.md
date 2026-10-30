@@ -75,8 +75,9 @@ Verified in pi 1.4.0 source: `tool_result` changes reach the `toolResult` messag
   - lowercase and uppercase hex variants
   - the userinfo and path parts of URLs (Alchemy/dRPC RPC URLs carry the key in the path)
   - percent-encoded values (`DATABASE_URL` passwords with `@`, `/`, `+`)
+  - fragments: any run of 12 or more characters from a non-URL secret, never crossing whitespace (ADR-0002). Catches `head -c`, `cut -c`, `tail -c`, `fold` and wrapped output
 - JSON escaping is handled by walking strings, not by derived forms.
-- Not covered: base64, split or partial values.
+- Not covered: base64, reversed values, chunks shorter than 12 characters, fragments of URL-shaped secrets.
 - Vendor prefixes catch keys that were never loaded.
 
 ### Blocking

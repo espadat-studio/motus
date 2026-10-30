@@ -30,7 +30,7 @@ A source applies to a working directory when that directory's secrets come from 
 All loaded secrets plus their derived forms, held in memory for the session.
 
 **Derived form**:
-Another spelling of a secret's value that output may contain (with or without `0x`, other hex case, inside a URL, percent-encoded).
+Another spelling of a secret's value that output may contain (with or without `0x`, other hex case, inside a URL, percent-encoded, a run of 12 or more characters).
 
 **Vendor prefix**:
 A known key prefix that marks a value as secret even if no source loaded it.

@@ -11,7 +11,9 @@ Child processes keep inheriting your environment. Stripping secrets from it woul
 
 ## What matching misses
 
-- Base64, and values split across lines or tool calls.
+- Base64 and reversed values.
+- Chunks shorter than 12 characters, such as the last line of a wrapped secret. Longer chunks are redacted.
+- Fragments of URL-shaped secrets. Their full value and key parts are still redacted.
 - Values shorter than `minValueLength` (8 by default).
 - Secrets no source loaded and no vendor prefix covers.
 - [pi](https://github.com/earendil-works/pi) keeps bash output in `/tmp/pi-bash-*` and in streaming updates. Neither reaches the model unredacted.
