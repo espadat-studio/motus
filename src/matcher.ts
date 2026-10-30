@@ -10,6 +10,7 @@ export interface Matcher {
 
 const TOKEN_CHAR = 'A-Za-z0-9_-'
 const MIN_PREFIXED_BODY_LENGTH = 8
+const FRAGMENT_LENGTH = 12
 
 export function createMatcher(
   secrets: readonly { name: string; value: string }[],
@@ -17,13 +18,18 @@ export function createMatcher(
 ): Matcher {
   const warnings: string[] = []
   const nameByForm = new Map<string, string>()
+  const nameByFragment = new Map<string, string>()
   for (const { name, value } of secrets) {
     if (value.length < minValueLength) {
       warnings.push(`${name} is shorter than ${minValueLength} characters and will not be redacted`)
       continue
     }
-    for (const form of derivedForms(value))
+    const forms = derivedForms(value)
+    for (const form of forms)
       if (form.length >= minValueLength && !nameByForm.has(form)) nameByForm.set(form, name)
+    if (URL.parse(value)?.host) continue
+    for (const fragment of fragments(forms))
+      if (!nameByFragment.has(fragment)) nameByFragment.set(fragment, name)
   }
 
   const branches = []
@@ -35,9 +41,17 @@ export function createMatcher(
 
   const pattern = new RegExp(branches.join('|'), 'g')
   const redactString = (text: string): string =>
-    text.replace(
-      pattern,
-      (match, ...rest) => `[REDACTED:${nameByForm.get(match) ?? (rest.at(-1) as { prefix: string }).prefix}]`,
+    redactFragments(
+      text.replace(
+        pattern,
+        (match, ...rest) =>
+          `[REDACTED:${
+            nameByForm.get(match)
+              ?? nameByFragment.get(match.slice(0, FRAGMENT_LENGTH))
+              ?? (rest.at(-1) as { prefix: string }).prefix
+          }]`,
+      ),
+      nameByFragment,
     )
 
   return { redact: <T>(value: T): T => walk(value, redactString) as T, warnings }
@@ -55,6 +69,36 @@ function derivedForms(value: string): string[] {
     for (const part of [url.username, url.password, ...url.pathname.split('/')]) forms.push(part, decode(part))
   }
   return forms
+}
+
+function fragments(forms: readonly string[]): string[] {
+  const result = []
+  for (const form of forms) {
+    for (const run of form.split(/\s+/)) {
+      for (let start = 0; start + FRAGMENT_LENGTH <= run.length; start++)
+        result.push(run.slice(start, start + FRAGMENT_LENGTH))
+    }
+  }
+  return result
+}
+
+function redactFragments(text: string, nameByFragment: ReadonlyMap<string, string>): string {
+  if (nameByFragment.size === 0) return text
+  let output = ''
+  let copied = 0
+  let start = 0
+  while (start + FRAGMENT_LENGTH <= text.length) {
+    const name = nameByFragment.get(text.slice(start, start + FRAGMENT_LENGTH))
+    if (!name) {
+      start++
+      continue
+    }
+    let end = start + FRAGMENT_LENGTH
+    while (end < text.length && nameByFragment.has(text.slice(end + 1 - FRAGMENT_LENGTH, end + 1))) end++
+    output += `${text.slice(copied, start)}[REDACTED:${name}]`
+    copied = start = end
+  }
+  return output + text.slice(copied)
 }
 
 function decode(part: string): string {
