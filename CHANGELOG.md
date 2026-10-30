@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.0](https://github.com/espadat-studio/motus/compare/v1.0.0...v1.1.0) (2026-10-30)
+
+
+### Features
+
+* **mise:** detect age keys in file-task env headers ([#49](https://github.com/espadat-studio/motus/issues/49)) ([f28aafd](https://github.com/espadat-studio/motus/commit/f28aafd00a4bfa491d33c67603328a7abadc5193)), closes [#46](https://github.com/espadat-studio/motus/issues/46)
+* **mise:** parse configs with smol-toml to cover inline task env ([#48](https://github.com/espadat-studio/motus/issues/48)) ([faf3bc4](https://github.com/espadat-studio/motus/commit/faf3bc47c46336e0f51897f4e575f807db987605)), closes [#45](https://github.com/espadat-studio/motus/issues/45)
+
+
+### Bug Fixes
+
+* **env:** redact __MISE_DIFF and __MISE_SESSION blobs ([#42](https://github.com/espadat-studio/motus/issues/42)) ([5f6eca2](https://github.com/espadat-studio/motus/commit/5f6eca2781d6e275d5b9121017a4f0949086e3fd)), closes [#41](https://github.com/espadat-studio/motus/issues/41)
+* **mise:** decrypt age keys in task env tables ([#47](https://github.com/espadat-studio/motus/issues/47)) ([8af4ee8](https://github.com/espadat-studio/motus/commit/8af4ee8c00e8ea6667e6a91f9eed9b4fe857deb6)), closes [#44](https://github.com/espadat-studio/motus/issues/44)
+
 ## 1.0.0 (2026-10-29)
 
 
