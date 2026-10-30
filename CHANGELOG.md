@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/espadat-studio/motus/compare/v1.1.0...v1.2.0) (2026-10-30)
+
+
+### Features
+
+* **matcher:** redact fragments of url-shaped secrets ([#55](https://github.com/espadat-studio/motus/issues/55)) ([e85a33c](https://github.com/espadat-studio/motus/commit/e85a33cfed4a98431e3e4201d2b720811578341a))
+* **matcher:** redact truncated and wrapped fragments of secrets ([#53](https://github.com/espadat-studio/motus/issues/53)) ([fabed0c](https://github.com/espadat-studio/motus/commit/fabed0c67371c7e5fb2f6b1cbdefce213010a7ce))
+
 ## [1.1.0](https://github.com/espadat-studio/motus/compare/v1.0.0...v1.1.0) (2026-10-30)
 
 

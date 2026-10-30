@@ -1,6 +1,6 @@
 {
   "name": "@espadat/motus",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Keep API keys and tokens out of your AI coding agent. Redacts exact secret values from tool output and session files in pi, and blocks credential files and printing commands in pi and Claude Code. Fails closed.",
   "keywords": [
     "pi-package",
