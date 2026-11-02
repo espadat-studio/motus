@@ -18,7 +18,7 @@ type Handler = (event: Record<string, unknown>, ctx: unknown) => unknown
 const homes: string[] = []
 after(() => Promise.all(homes.map((home) => rm(home, { recursive: true, force: true }))))
 
-async function setup(config: unknown = {}, extraEnv: Record<string, string> = {}, deferStart = false) {
+async function setup(config: unknown = {}, extraEnv: Record<string, string> = {}, deferStart = false, hasUI = true) {
   const home = await mkdtemp(join(tmpdir(), 'motus-'))
   homes.push(home)
   await mkdir(join(home, 'vault'))
@@ -36,6 +36,7 @@ async function setup(config: unknown = {}, extraEnv: Record<string, string> = {}
   const ctx = {
     cwd: home,
     signal: undefined,
+    hasUI,
     ui: { notify: (message: string, type?: string) => notes.push({ message, type }) },
   }
   createMotus({ configPath, env: { HOME: home, API_TOKEN: TOKEN, ...extraEnv } })(pi as unknown as ExtensionAPI)
@@ -89,6 +90,43 @@ describe('session_start', () => {
     const { notes, emit } = await setup({ sources: [{ type: 'command', command: 'exit 3', required: false }] })
     assert.equal(notes[0]?.type, 'warning')
     assert.equal(await emit('tool_call', { toolName: 'ls', input: {} }), undefined)
+  })
+})
+
+describe('without a UI', () => {
+  const warning = { sources: [{ type: 'command', command: 'exit 3', required: false }] }
+
+  async function captureStderr(run: () => Promise<unknown>): Promise<string> {
+    const written: string[] = []
+    const original = process.stderr.write
+    process.stderr.write = ((chunk: string) => {
+      written.push(chunk)
+      return true
+    }) as typeof process.stderr.write
+    try {
+      await run()
+    } finally {
+      process.stderr.write = original
+    }
+    return written.join('')
+  }
+
+  test('session start reports to stderr, not notify', async () => {
+    let notes: unknown[] = []
+    const stderr = await captureStderr(async () => {
+      notes = (await setup(warning, {}, false, false)).notes
+    })
+    assert.deepEqual(notes, [])
+    assert.match(stderr, /status: active/)
+    assert.match(stderr, /1 secret from env/)
+    assert.ok(!stderr.includes(TOKEN))
+  })
+
+  test('/motus status reports to stderr', async () => {
+    const { motus, notes } = await setup(warning, {}, false, false)
+    const stderr = await captureStderr(async () => motus('status'))
+    assert.deepEqual(notes, [])
+    assert.match(stderr, /status: active/)
   })
 })
 

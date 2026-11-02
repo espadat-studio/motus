@@ -89,7 +89,7 @@ export function createMotus(
     pi.on('session_start', async (_event, ctx) => {
       try {
         state = await loadState(configPath, ctx.cwd, env)
-        ctx.ui.notify(describeState(state), state.level)
+        notifyOperator(ctx, describeState(state), state.level)
       } finally {
         finishLoad()
       }
@@ -154,7 +154,7 @@ export function createMotus(
       try {
         const { customInstructions, preparation } = event
         if (customInstructions && state.matcher.redact(customInstructions) !== customInstructions) {
-          ctx.ui.notify('motus: compaction cancelled: the instructions hold a loaded secret value', 'error')
+          notifyOperator(ctx, 'motus: compaction cancelled: the instructions hold a loaded secret value', 'error')
           return { cancel: true }
         }
         preparation.messagesToSummarize = state.matcher.redact(preparation.messagesToSummarize)
@@ -183,18 +183,19 @@ export function createMotus(
       description: 'motus status | continue',
       handler: async (args, ctx) => {
         const subcommand = args.trim()
-        if (subcommand === 'status' || subcommand === '') return ctx.ui.notify(describeState(state), 'info')
+        if (subcommand === 'status' || subcommand === '') return notifyOperator(ctx, describeState(state), 'info')
         if (subcommand !== 'continue')
-          return ctx.ui.notify(`motus: unknown subcommand "${subcommand}"; use status or continue`, 'error')
-        if (!state.degraded) return ctx.ui.notify('motus: session is not degraded', 'info')
+          return notifyOperator(ctx, `motus: unknown subcommand "${subcommand}"; use status or continue`, 'error')
+        if (!state.degraded) return notifyOperator(ctx, 'motus: session is not degraded', 'info')
         if (!state.blocksLoaded) {
-          return ctx.ui.notify(
+          return notifyOperator(
+            ctx,
             'motus: cannot continue: blocks did not load, so motus cannot enforce them. Fix the config and restart the session',
             'error',
           )
         }
         state = { ...state, degraded: undefined, continued: true }
-        ctx.ui.notify('motus: partial protection accepted for this session; blocks still apply', 'warning')
+        notifyOperator(ctx, 'motus: partial protection accepted for this session; blocks still apply', 'warning')
       },
     })
   }
@@ -228,6 +229,11 @@ async function loadState(configPath: string, cwd: string, env: NodeJS.ProcessEnv
     report: [describeLoad(result), ...matcher.warnings].join('\n'),
     level: failed.length > 0 ? 'error' : result.failures.length + matcher.warnings.length > 0 ? 'warning' : 'info',
   }
+}
+
+function notifyOperator(ctx: ExtensionContext, message: string, level: State['level']): void {
+  if (ctx.hasUI) ctx.ui.notify(message, level)
+  else process.stderr.write(`${message}\n`)
 }
 
 function describeState({ report, degraded, continued, blocksLoaded }: State): string {
