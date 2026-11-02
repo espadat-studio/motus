@@ -79,6 +79,37 @@ describe('createMatcher', () => {
     assert.equal(redact('XAKIAFIXTURE0000001'), 'XAKIAFIXTURE0000001')
   })
 
+  test('redacts vendor-prefixed tokens directly after escape residue', () => {
+    const { redact } = createMatcher([], OPTIONS)
+    const token = 'AKIAFIXTURE0000001'
+    const residues = [
+      '\\n',
+      '\\t',
+      '\\r',
+      '\\b',
+      '\\f',
+      '\\u000a',
+      '\x1b[32m',
+      '\x1b[K',
+      '%3D',
+      '%20',
+      '\\u001b[32m',
+      '\\u001B[32m',
+      '\\x1b[32m',
+      '\\x1B[32m',
+      '\\033[32m',
+      '\\e[32m',
+    ]
+    for (const residue of residues)
+      assert.equal(redact(`${residue}${token}`), `${residue}[REDACTED:AKIA]`, JSON.stringify(residue))
+  })
+
+  test('leaves prefixes after ordinary word characters alone', () => {
+    const { redact } = createMatcher([], OPTIONS)
+    assert.equal(redact('C:\\tmpAKIAFIXTURE0000001'), 'C:\\tmpAKIAFIXTURE0000001')
+    assert.equal(redact('XAKIAFIXTURE0000001'), 'XAKIAFIXTURE0000001')
+  })
+
   test('walks every string in nested objects and arrays without mutating input', () => {
     const { redact } = createMatcher([{ name: 'API_TOKEN', value: 'fixture-token-0001' }], OPTIONS)
     const input = {
