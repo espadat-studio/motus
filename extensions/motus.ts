@@ -58,6 +58,11 @@ export function createMotus(
       level: 'error',
     }
 
+    let finishLoad: () => void = () => {}
+    const loaded = new Promise<void>((resolve) => {
+      finishLoad = resolve
+    })
+
     const checkShellCommand = (command: string): string | undefined =>
       checkCommand(command, state.config?.blockCommands ?? [])
       || checkBashPaths(command, state.blockPaths, home)
@@ -82,8 +87,12 @@ export function createMotus(
     }
 
     pi.on('session_start', async (_event, ctx) => {
-      state = await loadState(configPath, ctx.cwd, env)
-      ctx.ui.notify(describeState(state), state.level)
+      try {
+        state = await loadState(configPath, ctx.cwd, env)
+        ctx.ui.notify(describeState(state), state.level)
+      } finally {
+        finishLoad()
+      }
     })
 
     pi.on('tool_call', (event, ctx) => {
@@ -104,7 +113,8 @@ export function createMotus(
       }
     })
 
-    pi.on('message_end', (event) => {
+    pi.on('message_end', async (event) => {
+      await loaded
       try {
         return { message: state.matcher.redact(event.message) }
       } catch {
@@ -114,7 +124,8 @@ export function createMotus(
       }
     })
 
-    pi.on('input', (event) => {
+    pi.on('input', async (event) => {
+      await loaded
       const text = state.matcher.redact(event.text)
       return text === event.text ? { action: 'continue' } : { action: 'transform', text }
     })
@@ -130,7 +141,8 @@ export function createMotus(
       }
     })
 
-    pi.on('before_provider_request', (event) => {
+    pi.on('before_provider_request', async (event) => {
+      await loaded
       try {
         return state.matcher.redact(event.payload)
       } catch {
