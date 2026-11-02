@@ -58,13 +58,44 @@ export function createMatcher(
 }
 
 function derivedForms(value: string): string[] {
-  const forms = [value, ...percentEncodedForms(value)]
+  const forms = [value, ...percentEncodedForms(value), ...escapedForms(value)]
   const hex = /^(?:0x)?([0-9a-fA-F]+)$/.exec(value)?.[1]
   if (hex) {
     for (const digits of [hex, hex.toLowerCase(), hex.toUpperCase()]) forms.push(digits, `0x${digits}`)
   }
   forms.push(...(urlPartForms(value) ?? []))
   return forms
+}
+
+function escapedForms(value: string): string[] {
+  const json = JSON.stringify(value).slice(1, -1)
+  const doubleQuoted = value.replace(/[\\"$`]/g, '\\$&')
+  const singleQuoted = value.replaceAll("'", "'\\''")
+  return [json, doubleQuoted, singleQuoted, ansiCQuoted(value)].filter((form) => form !== value)
+}
+
+const ANSI_C_ESCAPES: Record<string, string> = {
+  '\x07': '\\a',
+  '\b': '\\b',
+  '\x1b': '\\E',
+  '\f': '\\f',
+  '\n': '\\n',
+  '\r': '\\r',
+  '\t': '\\t',
+  '\v': '\\v',
+  '\\': '\\\\',
+  "'": "\\'",
+}
+
+function ansiCQuoted(value: string): string {
+  return value.replace(
+    /[\p{Cc}\\']/gu,
+    (char) => {
+      const code = char.charCodeAt(0)
+      if (code > 0x1f && code !== 0x7f && !(char in ANSI_C_ESCAPES)) return char
+      return ANSI_C_ESCAPES[char] ?? `\\${code.toString(8).padStart(3, '0')}`
+    },
+  )
 }
 
 function percentEncodedForms(value: string): string[] {
