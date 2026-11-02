@@ -377,15 +377,15 @@ function escapeRegExp(text: string): string {
 
 export function expandPath(entry: string, env: NodeJS.ProcessEnv, at: string): string {
   const home = env['HOME']
-  if (home === undefined) throw new Error('HOME is not set')
+  if (!home) throw new Error('HOME is not set or empty')
   return entry.replace(TILDE, home).replace(
     /\$(?:\{(\w+)(?::-([^}]*))?\}|(\w+))/g,
     (_match, braced, fallback: string | undefined, bare) => {
       const name: string = braced ?? bare
       const value = env[name]
-      if (fallback !== undefined && !value) return fallback.replace(TILDE, home)
-      if (value === undefined) throw new Error(`${at} "${entry}": $${name} is not set`)
-      return value
+      const resolved = value || fallback?.replace(TILDE, home)
+      if (!resolved) throw new Error(`${at} "${entry}": $${name} is not set or empty`)
+      return resolved
     },
   )
 }

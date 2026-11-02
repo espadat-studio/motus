@@ -278,6 +278,16 @@ describe('paths', () => {
     assert.throws(() => resolveBlockPaths(['$NOPE/x'], env), /\$NOPE/)
   })
 
+  for (const entry of ['$EMPTY/x', '${EMPTY}/x', '$EMPTY/', '${NOPE:-}/x', '${EMPTY:-}/x']) {
+    test(`throws on ${entry}`, () => {
+      assert.throws(() => resolveBlockPaths([entry], { ...env, EMPTY: '' }), /not set or empty/)
+    })
+  }
+
+  test('throws on an empty HOME', () => {
+    assert.throws(() => resolveBlockPaths(['/x'], { ...env, HOME: '' }), /HOME/)
+  })
+
   test('uses the fallback of an unset or empty variable, expanding ~', () => {
     assert.deepEqual(resolveBlockPaths(['${NOPE:-~/store}/x', '${EMPTY:-/fallback}'], { ...env, EMPTY: '' }), [
       join(home, 'store/x'),
