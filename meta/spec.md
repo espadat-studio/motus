@@ -82,6 +82,7 @@ Verified in pi 1.4.0 source: `tool_result` changes reach the `toolResult` messag
   - fragments: any run of 12 or more characters from a secret, never crossing whitespace (ADR-0002). For a URL, only from its secret parts, each taken alone. Catches `head -c`, `cut -c`, `tail -c`, `fold` and wrapped output
 - Walking strings covers only parsed structures. JSON text inside one string needs the JSON-escaped derived form.
 - Not covered: base64, reversed values, chunks shorter than 12 characters, ordinary URL text on its own.
+- A secret containing whitespace (mnemonics, passphrases) is chunk-matched only inside words of 12 or more characters. Shorter words are redacted only as part of the whole value, so `cut`, `head`, `fold`, JSON word arrays and numbered lists of the words pass through unredacted (ADR-0002).
 - Vendor prefixes catch keys that were never loaded.
 
 ### Blocking
