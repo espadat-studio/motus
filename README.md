@@ -24,7 +24,7 @@ Status: 1.0 is not published to npm yet, and the end-to-end smoke test in [pi](h
 
 ### pi
 
-Install globally and load motus before every other extension:
+Install globally and put motus first in `packages`:
 
 ```sh
 pi install npm:@espadat/motus
@@ -42,7 +42,8 @@ pi install npm:@espadat/motus
 ```
 
 - Global, never `--local`: subagent [pi](https://github.com/earendil-works/pi) processes only load global extensions.
-- First in `packages` of `~/.pi/agent/settings.json`: handlers run in load order, so an extension loaded earlier sees raw tool output and messages.
+- First in `packages` of `~/.pi/agent/settings.json`. This orders motus among packages only.
+- Handlers run in load order, so an extension loaded earlier sees raw tool output and messages. These always load before every entry in `packages`: `-e` extensions, the `extensions` array in settings, and `~/.pi/agent/extensions`. In a trusted project, `.pi/extensions`, project settings entries and project packages also load earlier. Audit those locations.
 - [pi](https://github.com/earendil-works/pi) can't report handler order, so motus doesn't check either rule.
 
 Create `~/.config/motus/config.toml`. Without it every session starts degraded.
