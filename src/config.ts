@@ -188,6 +188,7 @@ function asStrings(raw: unknown, at: string): string[] {
 function asPrefixes(raw: unknown): string[] {
   const prefixes = asStrings(raw, 'prefixes')
   try {
+    for (const prefix of prefixes) new RegExp(prefix)
     new RegExp(prefixBranch(prefixes))
   } catch {
     throw new Error('prefixes must compile as a regular expression inside a named group')

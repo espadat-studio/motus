@@ -104,6 +104,7 @@ describe('parseConfig', () => {
     ],
     ['uncompilable prefix', { prefixes: ['xox['] }, /prefixes must compile/],
     ['prefix that compiles alone but not in the named group', { prefixes: ['(?<prefix>x)'] }, /prefixes must compile/],
+    ['prefix that escapes the named group', { prefixes: ['a)|(b'] }, /prefixes must compile/],
     ['unknown claudeCode key', { claudeCode: { block: [] } }, /claudeCode has unknown key "block"/],
     ['duplicate source ids', {
       sources: [{ type: 'command', command: 'true' }, { type: 'command', command: 'true' }],
