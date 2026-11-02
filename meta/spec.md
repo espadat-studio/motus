@@ -102,7 +102,12 @@ interface SecretSource {
   id: string
   appliesTo(ctx: { cwd: string }): Promise<boolean>
   load(
-    ctx: { cwd: string; signal: AbortSignal; warn(message: string): void },
+    ctx: {
+      cwd: string
+      signal: AbortSignal
+      warn(message: string): void
+      progress(): void
+    },
   ): Promise<Secret[]>
 }
 
@@ -116,9 +121,10 @@ interface Secret {
 - `load` **throws** on failure. Never return an empty list for an error (the bug in `pi-fnox`).
 - A partial failure throws `PartialLoadError` carrying the secrets that did load; the core redacts them and still reports the failure.
 - `warn` reports problems that don't fail the source (drift, a failed file that doesn't cover the cwd).
+- `progress` restarts the source's timeout. A source that loads in steps calls it after each step: `pa` after `pa list` and each `pa show`, `mise` as each file settles. The core owns the timer and `signal`.
 - `appliesTo` drives D5. A failing required source blocks only where it applies. Example: mise applies when the cwd has an age-encrypted config.
 - Adapters return secrets. The core owns derived forms, matching and policy.
-- Each source config has `required: boolean` (default `true`), a timeout (default 10 s) and adapter options.
+- Each source config has `required: boolean` (default `true`), a timeout (`timeoutMs`, default 10 s) and adapter options. The timeout is the longest a source may go without progress (ADR 0004). One-step sources never report progress, so for them it bounds the whole load. There is no cap on total load time.
 
 | Adapter                                                 | Release | Loads                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Notes                                                                                                                                                                                                                                                                     |
 | ------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

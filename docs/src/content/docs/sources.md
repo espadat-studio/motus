@@ -58,7 +58,7 @@ entries = ["web/github", "mail"]
 - Set exactly one of `entries` or `whole = true`. `whole` loads every entry except `*/meta`.
 - `dir` defaults to `${PA_DIR:-~/.local/share/pa}`.
 - Kept lines are non-blank and at least `minValueLength` characters. One kept line gives `web/github`. Several give `web/github:1`, `web/github:2`. An entry with none loads nothing.
-- Entries decrypt one by one within the source's `timeoutMs`. Raise it for a long `entries` list or a large `whole` store.
+- Entries decrypt one by one. `timeoutMs` bounds each entry, not the whole store, so a large `whole` store or parallel sub-agents sharing one TPM still load. Raise it only when a single entry is slow, such as a YubiKey PIN prompt.
 
 The unlock method decides what startup costs:
 
