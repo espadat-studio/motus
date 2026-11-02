@@ -9,6 +9,8 @@ export interface Matcher {
 }
 
 const TOKEN_CHAR = 'A-Za-z0-9_-'
+const ESCAPE_RESIDUE = String
+  .raw`\\(?:[bfnrt"\\/]|u[0-9a-fA-F]{4})|%[0-9a-fA-F]{2}|(?:\x1b|\\u001[bB]|\\x1[bB]|\\033|\\e)\[[0-?]*[ -/]*[@-~]`
 const MIN_PREFIXED_BODY_LENGTH = 8
 const FRAGMENT_LENGTH = 12
 const ORDINARY_URL_TEXT = /^[a-z_-]*$/
@@ -35,8 +37,13 @@ export function createMatcher(
   const branches = []
   if (nameByForm.size > 0)
     branches.push([...nameByForm.keys()].sort((a, b) => b.length - a.length).map(escapeRegExp).join('|'))
-  if (prefixes.length > 0)
-    branches.push(`(?<![${TOKEN_CHAR}])(?<prefix>${prefixes.join('|')})[${TOKEN_CHAR}]{${MIN_PREFIXED_BODY_LENGTH},}`)
+  if (prefixes.length > 0) {
+    branches.push(
+      `(?:(?<![${TOKEN_CHAR}])|(?<=${ESCAPE_RESIDUE}))(?<prefix>${
+        prefixes.join('|')
+      })[${TOKEN_CHAR}]{${MIN_PREFIXED_BODY_LENGTH},}`,
+    )
+  }
   if (branches.length === 0) return { redact: (value) => value, warnings }
 
   const pattern = new RegExp(branches.join('|'), 'g')
