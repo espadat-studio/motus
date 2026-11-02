@@ -9,7 +9,14 @@ import {
   truncateTail,
 } from '@earendil-works/pi-coding-agent'
 
-import { checkBashPaths, checkCommand, checkPath, checkPlaceholders, resolveBlockPaths } from '../src/blocklist.ts'
+import {
+  checkBashPaths,
+  checkCommand,
+  checkPath,
+  checkPlaceholders,
+  normalizePiPath,
+  resolveBlockPaths,
+} from '../src/blocklist.ts'
 import { type Config, DEFAULT_CONFIG_PATH, DEFAULT_MIN_VALUE_LENGTH, DEFAULT_PREFIXES } from '../src/config.ts'
 import { createMatcher, type Matcher } from '../src/matcher.ts'
 import { describeLoad, loadFromConfig } from '../src/sources.ts'
@@ -66,6 +73,7 @@ export function createMotus(
       for (const text of collectStrings(event.input)) {
         if (text.length > MAX_PATH_LENGTH || text.includes('\n')) continue
         const reason = checkPath(text, cwd, state.blockPaths, home)
+          || checkPath(normalizePiPath(text, home), cwd, state.blockPaths, home)
         if (reason) return reason
       }
       return undefined

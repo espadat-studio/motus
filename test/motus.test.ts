@@ -175,6 +175,29 @@ describe('tool_call', () => {
     assert.equal(await emit('tool_call', { toolName: 'read', input: { path: 'notes.md' } }), undefined)
   })
 
+  test('blocks the spellings pi opens as a blocked file', async () => {
+    const { emit, home } = await setup(config)
+    const spellings = [
+      'x/../vault/key',
+      `@${home}/vault/key`,
+      '@vault/key',
+      `file://${home}/vault/key`,
+      `@file://${home}/vault/key`,
+      '~/vault/key',
+      `${home}/vault/key`,
+      'x/../vault/key',
+    ]
+    for (const path of spellings) assert.ok(await emit('tool_call', { toolName: 'read', input: { path } }), path)
+    assert.ok(await emit('tool_call', { toolName: 'grep', input: { pattern: 'x', path: '@~/vault' } }))
+    assert.ok(await emit('tool_call', { toolName: 'write', input: { path: '@~/vault/new', content: 'x' } }))
+  })
+
+  test('single-line write content and bad file URLs do not throw', async () => {
+    const { emit } = await setup(config)
+    for (const content of ['hello', 'file://%zz', 'file:', '@'])
+      assert.equal(await emit('tool_call', { toolName: 'write', input: { path: 'notes.md', content } }), undefined)
+  })
+
   test('blocks placeholders of loaded names in write, edit and bash', async () => {
     const { emit } = await setup()
     const edit = { path: 'a', edits: [{ oldText: 'x', newText: 'k=[REDACTED:API_TOKEN]' }] }
