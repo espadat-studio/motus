@@ -71,6 +71,18 @@ export function checkPath(arg: string, cwd: string, blockPaths: readonly string[
   return entry === undefined ? undefined : `path is under blockPaths entry "${entry}"`
 }
 
+export function checkSearchRoot(
+  arg: string | undefined,
+  cwd: string,
+  blockPaths: readonly string[],
+  home: string,
+): string | undefined {
+  const root = resolveRealpath(resolve(cwd, normalizePiPath(arg ?? '.', home)))
+  const prefix = root.endsWith(sep) ? root : root + sep
+  const entry = blockPaths.find((blocked) => blocked.startsWith(prefix))
+  return entry === undefined ? undefined : `search root contains blockPaths entry "${entry}"`
+}
+
 export function normalizePiPath(arg: string, home: string): string {
   const unspaced = arg.replace(UNICODE_SPACES, ' ')
   const path = (unspaced.startsWith('@') ? unspaced.slice(1) : unspaced).replace(TILDE, home)

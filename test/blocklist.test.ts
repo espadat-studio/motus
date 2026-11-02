@@ -10,6 +10,7 @@ import {
   checkFileUrl,
   checkPath,
   checkPlaceholders,
+  checkSearchRoot,
   normalizePiPath,
   resolveBlockPaths,
 } from '../src/blocklist.ts'
@@ -320,6 +321,28 @@ describe('paths', () => {
     for (const [arg, cwd, isBlocked] of cases) {
       test(`${isBlocked ? 'blocks' : 'allows'} ${arg} from ${cwd}`, () => {
         assert.equal(Boolean(checkPath(arg, cwd, blockPaths, home)), isBlocked)
+      })
+    }
+  })
+
+  describe('checkSearchRoot', () => {
+    const cases: Array<[string | undefined, string, boolean]> = [
+      [home, '/', true],
+      ['~', '/', true],
+      ['..', join(home, '.config/mise'), true],
+      ['@' + join(home, '.config'), '/', true],
+      ['.config', home, true],
+      [undefined, home, true],
+      [undefined, '/', true],
+      ['link', home, false],
+      ['store/sub', home, false],
+      ['.config/mise/age.txt', home, false],
+      ['storefront', home, false],
+      [undefined, join(home, 'store'), false],
+    ]
+    for (const [arg, cwd, isBlocked] of cases) {
+      test(`${isBlocked ? 'blocks' : 'allows'} ${arg ?? 'no path'} from ${cwd}`, () => {
+        assert.equal(Boolean(checkSearchRoot(arg, cwd, blockPaths, home)), isBlocked)
       })
     }
   })

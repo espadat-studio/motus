@@ -171,6 +171,15 @@ describe('tool_call', () => {
       assert.ok(await emit('tool_call', { toolName: 'bash', input: { command } }), command)
   })
 
+  test('blocks a grep root containing a blockPaths entry', async () => {
+    const { emit, home } = await setup(config)
+    for (const input of [{}, { path: '.' }, { path: '..' }, { path: '@' + home }, { path: '~' }])
+      assert.ok(await emit('tool_call', { toolName: 'grep', input }), JSON.stringify(input))
+    assert.equal(await emit('tool_call', { toolName: 'grep', input: { path: 'other' } }), undefined)
+    const write = { toolName: 'write', input: { path: 'notes.md', content: 'see /' } }
+    assert.equal(await emit('tool_call', write), undefined)
+  })
+
   test('blocks commands after a line continuation', async () => {
     const { emit } = await setup(config)
     assert.ok(await emit('tool_call', { toolName: 'bash', input: { command: 'true && \\\npa show x' } }))
