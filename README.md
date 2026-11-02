@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/src/assets/motus-icon.svg" alt="motus" width="128" height="128">
+
 # motus
 
 **[motus.espadat.com](https://motus.espadat.com)**

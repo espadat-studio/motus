@@ -10,7 +10,7 @@ export default defineConfig({
       title: 'motus',
       description:
         'Keep API keys and tokens out of your AI coding agent. Redacts exact secret values from tool output and session files in pi, and blocks credential files and printing commands in pi and Claude Code. Fails closed.',
-      logo: { src: './src/assets/mark.svg', alt: 'Espadat' },
+      logo: { src: './src/assets/motus-icon.svg', alt: 'motus' },
       head: [
         {
           tag: 'link',
