@@ -193,10 +193,24 @@ describe('paSource', () => {
     })
   })
 
-  test('a missing listed entry throws naming the entry, never a partial list', async () => {
-    await assert.rejects(load({ ok: 'fixture-pass-0001' }, ['ok', 'gone']), (error: Error) => {
-      assert.equal(error.message, 'pa show "gone" exited with code 1')
-      assert.doesNotMatch(error.message, /fixture-pass-0001/)
+  test('a failing entry still tries the rest and carries what loaded', async () => {
+    await assert.rejects(
+      load({ alpha: 'fixture-pass-0001', omega: 'fixture-pass-0002' }, ['alpha', 'stale', 'omega']),
+      (error: Error) => {
+        assert.ok(error instanceof PartialLoadError)
+        assert.deepEqual(error.secrets.map(({ name }) => name), ['alpha', 'omega'])
+        assert.equal(error.message, 'pa show "stale" exited with code 1')
+        assert.doesNotMatch(error.message, /fixture-pass/)
+        return true
+      },
+    )
+  })
+
+  test('joins messages when several entries fail', async () => {
+    await assert.rejects(load({ ok: 'fixture-pass-0001' }, ['gone', 'ok', 'lost']), (error: Error) => {
+      assert.ok(error instanceof PartialLoadError)
+      assert.deepEqual(error.secrets.map(({ name }) => name), ['ok'])
+      assert.equal(error.message, 'pa show "gone" exited with code 1; pa show "lost" exited with code 1')
       return true
     })
   })

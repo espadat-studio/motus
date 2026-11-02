@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 
-import type { Secret, SecretSource } from '../sources.ts'
+import { PartialLoadError, type Secret, type SecretSource } from '../sources.ts'
 
 export interface PaOptions {
   dir: string
@@ -17,13 +17,23 @@ export function paSource(id: string, { dir, entries, minValueLength, env }: PaOp
       const options = { cwd, signal, env: { ...env, PA_DIR: dir } }
       const names = entries ?? (await listEntries(dir, options))
       const secrets: Secret[] = []
+      const failures: string[] = []
       for (const name of names) {
-        const lines = (await runPa(['show', name], options, `pa show "${name}"`))
+        let output: string
+        try {
+          output = await runPa(['show', name], options, `pa show "${name}"`)
+        } catch (error) {
+          if (signal.aborted) throw error
+          failures.push((error as Error).message)
+          continue
+        }
+        const lines = output
           .split(/\r?\n/)
           .filter((line) => line.trim() !== '' && line.length >= minValueLength)
         if (lines.length === 1) secrets.push({ name, value: lines[0] as string, source: id })
         else secrets.push(...lines.map((value, index) => ({ name: `${name}:${index + 1}`, value, source: id })))
       }
+      if (failures.length > 0) throw new PartialLoadError(failures.join('; '), secrets)
       return secrets
     },
   }
