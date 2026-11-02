@@ -16,6 +16,7 @@ Child processes keep inheriting your environment. Stripping secrets from it woul
 - Lowercase word path segments, usernames, query values and `#` parts on their own, such as `ethereum-mainnet` or `/hooks/correct-horse-battery`. The full URL is still redacted, so don't rely on a lowercase slug as a secret.
 - Values shorter than `minValueLength` (8 by default).
 - Secrets no source loaded and no vendor prefix covers.
+- The bug-report summary calls the provider directly and pi offers no hook for it, so it is not redacted. Compaction and branch summaries are covered by `session_before_compact` and `session_before_tree`.
 - [pi](https://github.com/earendil-works/pi) keeps bash output in `/tmp/pi-bash-*` and in streaming updates. Neither reaches the model unredacted.
 
 There are no entropy or generic hex rules, on purpose. They redact tx hashes, addresses and storage slots in web3 repos.
