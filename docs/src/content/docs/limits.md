@@ -12,6 +12,7 @@ Child processes keep inheriting your environment. Stripping secrets from it woul
 ## What matching misses
 
 - Base64 and reversed values.
+- Percent-encoded values written by encoders that leave other reserved characters literal (`: @ $ & , ; =`), double-encoded values such as `%2540`, and escapes that mix upper and lower hex.
 - Chunks shorter than 12 characters, such as the last line of a wrapped secret. Longer chunks are redacted.
 - Pieces of a secret that contains whitespace, such as a mnemonic or passphrase. Chunks match only inside words of 12 or more characters. Shorter words are redacted only as part of the whole value, so `cut`, `head`, `fold`, a JSON word array or a numbered list of a 12-word mnemonic comes back unchanged.
 - Lowercase word path segments, usernames, query values and `#` parts on their own, such as `ethereum-mainnet` or `/hooks/correct-horse-battery`. The full URL is still redacted, so don't rely on a lowercase slug as a secret.

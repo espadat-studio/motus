@@ -116,9 +116,10 @@ const PERCENT_VARIANTS: readonly (readonly [RegExp, (match: string) => string])[
 
 function percentEncodedForms(value: string): string[] {
   const base = encodeURIComponent(value)
+  const variants = PERCENT_VARIANTS.filter(([pattern]) => base.search(pattern) >= 0)
   const forms = new Set<string>()
-  for (let mask = 0; mask < 1 << PERCENT_VARIANTS.length; mask++) {
-    const encoded = PERCENT_VARIANTS.reduce(
+  for (let mask = 0; mask < 1 << variants.length; mask++) {
+    const encoded = variants.reduce(
       (text, [pattern, replacement], index) => (mask & (1 << index) ? text.replace(pattern, replacement) : text),
       base,
     )
