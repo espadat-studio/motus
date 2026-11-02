@@ -102,6 +102,9 @@ describe('parseConfig', () => {
       { sources: [{ type: 'pa', dir: 'store', whole: true }] },
       /sources\[0\].dir is not absolute/,
     ],
+    ['uncompilable prefix', { prefixes: ['xox['] }, /prefixes must compile/],
+    ['prefix that compiles alone but not in the named group', { prefixes: ['(?<prefix>x)'] }, /prefixes must compile/],
+    ['prefix that escapes the named group', { prefixes: ['a)|(b'] }, /prefixes must compile/],
     ['unknown claudeCode key', { claudeCode: { block: [] } }, /claudeCode has unknown key "block"/],
     ['duplicate source ids', {
       sources: [{ type: 'command', command: 'true' }, { type: 'command', command: 'true' }],
@@ -110,6 +113,17 @@ describe('parseConfig', () => {
       sources: [{ type: 'command', id: 'env', command: 'true' }],
     }, /source id "env" is used more than once/],
   ]
+  test('a prefix error holds no prefix text', () => {
+    assert.throws(
+      () => parseConfig({ prefixes: ['xox[secret-value'] }),
+      (error: Error) => !/secret-value/.test(error.message),
+    )
+  })
+
+  test('accepts the default prefixes', () => {
+    assert.doesNotThrow(() => parseConfig({ prefixes: ['xox[bp]-', 'sk-ant-'] }))
+  })
+
   for (const [label, raw, message] of invalid)
     test(`rejects ${label}`, () => assert.throws(() => parseConfig(raw), message))
 })

@@ -126,6 +126,20 @@ describe('degraded state', () => {
   })
 })
 
+describe('invalid prefixes', () => {
+  test('take the invalid-config path: env secrets redacted, no pattern in output', async () => {
+    const { emit, notes } = await setup({ prefixes: ['xox['], blockCommands: ['pa'] })
+    const note = notes.at(-1)
+    assert.equal(note?.type, 'error')
+    assert.ok(!note?.message.includes(TOKEN))
+    const result = (await emit('tool_result', {
+      toolName: 'bash',
+      content: [{ type: 'text', text: `leaked ${TOKEN}` }],
+    })) as { content: { text: string }[] } | undefined
+    assert.ok(!JSON.stringify(result).includes(TOKEN))
+  })
+})
+
 describe('/motus continue when blocks did not load', () => {
   const cases: [string, unknown][] = [
     ['unknown key', { nope: 1 }],
