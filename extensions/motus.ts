@@ -15,6 +15,7 @@ import {
   checkFileUrl,
   checkPath,
   checkPlaceholders,
+  checkSearchRoot,
   normalizePiPath,
   resolveBlockPaths,
 } from '../src/blocklist.ts'
@@ -76,6 +77,10 @@ export function createMotus(
         if (reason) return reason
       }
       if (isToolCallEventType('bash', event)) return checkShellCommand(event.input.command)
+      if (isToolCallEventType('grep', event)) {
+        const reason = checkSearchRoot(event.input.path, cwd, state.blockPaths, home)
+        if (reason) return reason
+      }
       for (const text of collectStrings(event.input)) {
         if (text.length > MAX_PATH_LENGTH || text.includes('\n')) continue
         const reason = checkFileUrl(text, home)
