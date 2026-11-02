@@ -8,6 +8,7 @@ const MISE_STATE_NAMES = new Set(['__MISE_DIFF', '__MISE_SESSION'])
 function isCredentialFreeUrl(value: string): boolean {
   const url = URL.parse(value)
   return url !== null && url.host !== '' && url.username === '' && url.password === '' && url.search === ''
+    && !/[;#]/.test(value)
 }
 
 function isSecret(name: string, value: string): boolean {
