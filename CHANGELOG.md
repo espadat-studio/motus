@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.3.0](https://github.com/espadat-studio/motus/compare/v1.2.0...v1.3.0) (2026-11-02)
+
+
+### Features
+
+* **mise:** discover conf.d, .config/mise/mise.toml and vars keys ([#59](https://github.com/espadat-studio/motus/issues/59)) ([0710419](https://github.com/espadat-studio/motus/commit/071041988616c8074d16ccbf78818d729c1e949a))
+
+
+### Bug Fixes
+
+* **blocklist:** drop backslash-newline in the tokenizer ([#61](https://github.com/espadat-studio/motus/issues/61)) ([75b3492](https://github.com/espadat-studio/motus/commit/75b3492f7ff3a6438952fe1e3ba1573786a2db80))
+* **blocklist:** skip shell comments in the tokenizer ([#60](https://github.com/espadat-studio/motus/issues/60)) ([47bdc74](https://github.com/espadat-studio/motus/commit/47bdc746c516ea51d7339af7955681179daa8c35))
+* **blocklist:** tokenize redirections apart from command words ([#62](https://github.com/espadat-studio/motus/issues/62)) ([a4a8845](https://github.com/espadat-studio/motus/commit/a4a88458957dd6c91e1fde94e6ffc3fa9f6ad725))
+* **matcher:** derive each value of a url hash ([#67](https://github.com/espadat-studio/motus/issues/67)) ([3c05eca](https://github.com/espadat-studio/motus/commit/3c05eca3541671a18ded59798f119ea8b0d22772))
+* **matcher:** derive JSON and shell-quoted secret spellings ([#65](https://github.com/espadat-studio/motus/issues/65)) ([b16de85](https://github.com/espadat-studio/motus/commit/b16de85ae3338d5e358de2abcd7b91ff30008e17))
+* **matcher:** match vendor prefixes after escape residue ([#68](https://github.com/espadat-studio/motus/issues/68)) ([44978ec](https://github.com/espadat-studio/motus/commit/44978ec0961351eb7a06cbfca5cd28c21412231f))
+* **mise:** decrypt task keys only from listed roots ([#57](https://github.com/espadat-studio/motus/issues/57)) ([291cd72](https://github.com/espadat-studio/motus/commit/291cd72173d9d70c65b5098a8bccfb4925f0b59e))
+* **pi:** redact compaction and branch summary requests ([#66](https://github.com/espadat-studio/motus/issues/66)) ([2b8b90b](https://github.com/espadat-studio/motus/commit/2b8b90b2b35d76525878c8fe7fb61e00d9ddcc73))
+* **pi:** refuse ! commands holding a loaded value ([#64](https://github.com/espadat-studio/motus/issues/64)) ([381423a](https://github.com/espadat-studio/motus/commit/381423afe3c1270eb60cdd0f00d339ecd7ae33ea))
+* **pi:** refuse /motus continue when blocks did not load ([#63](https://github.com/espadat-studio/motus/issues/63)) ([9d066e1](https://github.com/espadat-studio/motus/commit/9d066e11c60003cffa2942900d0caea297950dbb))
+* **sources:** keep partial secrets when a source times out ([#69](https://github.com/espadat-studio/motus/issues/69)) ([7b8ca46](https://github.com/espadat-studio/motus/commit/7b8ca463878d52f5f21ebf584cd61d9c268d189f))
+
 ## [1.2.0](https://github.com/espadat-studio/motus/compare/v1.1.0...v1.2.0) (2026-10-30)
 
 
