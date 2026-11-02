@@ -127,6 +127,11 @@ describe('tool_call', () => {
       assert.ok(await emit('tool_call', { toolName: 'bash', input: { command } }), command)
   })
 
+  test('blocks commands after a line continuation', async () => {
+    const { emit } = await setup(config)
+    assert.ok(await emit('tool_call', { toolName: 'bash', input: { command: 'true && \\\npa show x' } }))
+  })
+
   test('blocks commands and path spellings in bash', async () => {
     const { emit } = await setup(config)
     assert.ok(await emit('tool_call', { toolName: 'bash', input: { command: 'echo $(pa show x)' } }))

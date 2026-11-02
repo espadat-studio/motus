@@ -77,6 +77,33 @@ describe('checkCommand', () => {
   })
 })
 
+describe('checkCommand line continuation', () => {
+  const list = ['env', 'pa', 'gh auth token']
+  const blocked = [
+    'true && \\\nenv',
+    'true | \\\nenv',
+    'FOO=1 \\\nenv',
+    'gh \\\nauth \\\ntoken',
+    'echo $(\\\nenv)',
+    'sh -c "true && \\\nenv"',
+    'eval "true && \\\nenv"',
+    'sh -c true\\\n&& env',
+    'e\\\nnv',
+    'ls; \\\n\\\n  pa show x',
+  ]
+  for (const command of blocked) {
+    test(`blocks ${JSON.stringify(command)}`, () => {
+      assert.ok(checkCommand(command, list))
+    })
+  }
+
+  for (const command of ['ls \\\n-la', 'echo "a \\\nb"', "echo 'env \\\n'", 'true && \\\nls']) {
+    test(`allows ${JSON.stringify(command)}`, () => {
+      assert.equal(checkCommand(command, list), undefined)
+    })
+  }
+})
+
 describe('checkCommand comments', () => {
   const blocked = [
     "# Let's look\npa show x",
