@@ -1,5 +1,6 @@
 import { realpathSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const SEPARATORS = new Set(['|', ';', '&', '\n', '(', ')'])
 const WRAPPERS = new Set(['env', 'sudo', 'command', 'exec', 'time', 'nohup', 'xargs'])
@@ -17,6 +18,7 @@ const ASSIGNMENT = /^[A-Za-z_]\w*=/
 const SCRIPT_FLAG = /^-[a-z]*c[a-z]*$/
 const PLACEHOLDER = /\[REDACTED:([^\]\s]+)\]/g
 const TILDE = /^~(?=\/|$)/
+const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g
 const PATH_CONTINUES = '(?![\\w.-])'
 const REDIRECT = /^(?:&>>|&>|>>|>\||>&|<&|>|<)/
 const FD_NUMBER = /^(?:\d+|-)$/
@@ -66,6 +68,17 @@ export function checkPath(arg: string, cwd: string, blockPaths: readonly string[
   const path = resolveRealpath(resolve(cwd, arg.replace(TILDE, home)))
   const entry = blockPaths.find((blocked) => path === blocked || path.startsWith(blocked + sep))
   return entry === undefined ? undefined : `path is under blockPaths entry "${entry}"`
+}
+
+export function normalizePiPath(arg: string, home: string): string {
+  const unspaced = arg.replace(UNICODE_SPACES, ' ')
+  const path = (unspaced.startsWith('@') ? unspaced.slice(1) : unspaced).replace(TILDE, home)
+  if (!path.startsWith('file:')) return path
+  try {
+    return fileURLToPath(path)
+  } catch {
+    return path
+  }
 }
 
 export function checkBashPaths(command: string, blockPaths: readonly string[], home: string): string | undefined {

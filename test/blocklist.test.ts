@@ -4,7 +4,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
 
-import { checkBashPaths, checkCommand, checkPath, checkPlaceholders, resolveBlockPaths } from '../src/blocklist.ts'
+import {
+  checkBashPaths,
+  checkCommand,
+  checkPath,
+  checkPlaceholders,
+  normalizePiPath,
+  resolveBlockPaths,
+} from '../src/blocklist.ts'
 
 const COMMANDS = ['pa', 'gh auth token', 'mise env', 'cat .env*']
 
@@ -304,6 +311,20 @@ describe('paths', () => {
         assert.equal(Boolean(checkPath(arg, cwd, blockPaths, home)), isBlocked)
       })
     }
+  })
+
+  describe('normalizePiPath', () => {
+    const cases: Array<[string, string]> = [
+      ['a\u00A0b\u3000c', 'a b c'],
+      ['@x/y', 'x/y'],
+      ['@@x', '@x'],
+      ['@~/x', `${home}/x`],
+      ['file:///a/b%20c', '/a/b c'],
+      ['@file:///a', '/a'],
+      ['file://%zz', 'file://%zz'],
+    ]
+    for (const [arg, expected] of cases)
+      test(`maps ${JSON.stringify(arg)}`, () => assert.equal(normalizePiPath(arg, home), expected))
   })
 
   describe('checkBashPaths', () => {
