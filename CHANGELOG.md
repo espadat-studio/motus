@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.3.1](https://github.com/espadat-studio/motus/compare/v1.3.0...v1.3.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* **blocklist:** block configured spelling of symlinked paths ([#73](https://github.com/espadat-studio/motus/issues/73)) ([9a7fc5f](https://github.com/espadat-studio/motus/commit/9a7fc5f58c4763e2f5437c04cbcf146396af47d5))
+* **blocklist:** block file uri arguments to blocked paths ([#75](https://github.com/espadat-studio/motus/issues/75)) ([bb9ef55](https://github.com/espadat-studio/motus/commit/bb9ef55a8290b4f0f2c10c3797d392c4bbf28186))
+* **blocklist:** block grep roots containing blocked paths ([#79](https://github.com/espadat-studio/motus/issues/79)) ([4563ef0](https://github.com/espadat-studio/motus/commit/4563ef0e1208b491960bb1a5683045a0120727cc))
+* **blocklist:** match slash-bearing blockCommands entries ([#85](https://github.com/espadat-studio/motus/issues/85)) ([034ed12](https://github.com/espadat-studio/motus/commit/034ed12bf80ee5fd6bc0fd78f4c5a896d7d1f266))
+* **blocklist:** reject every emitted placeholder on write-back ([#81](https://github.com/espadat-studio/motus/issues/81)) ([df038f0](https://github.com/espadat-studio/motus/commit/df038f0c59c843161f1ef1178db1bf9c8c676292))
+* **blocklist:** treat empty variables as unset in blockPaths ([#76](https://github.com/espadat-studio/motus/issues/76)) ([900baae](https://github.com/espadat-studio/motus/commit/900baae403f5b81d9f43e73afbe63946cca28652))
+* **config:** validate prefixes at config parse ([#77](https://github.com/espadat-studio/motus/issues/77)) ([8aeb182](https://github.com/espadat-studio/motus/commit/8aeb182ae510c4fc34beb07d59db934fe37dbc25))
+* **matcher:** redact common percent-encoder spellings ([#86](https://github.com/espadat-studio/motus/issues/86)) ([5c9db41](https://github.com/espadat-studio/motus/commit/5c9db41bc3daa3fc00e7d7adfcb24d627936a743))
+* **matcher:** skip inapplicable percent variants and document limits ([f1e0290](https://github.com/espadat-studio/motus/commit/f1e02907007019a6073b8ffdb5222e0bdd30a881))
+* **pa:** keep decrypted entries when one entry fails ([#88](https://github.com/espadat-studio/motus/issues/88)) ([78b1e90](https://github.com/espadat-studio/motus/commit/78b1e9070f572ecd16ff9cae5e59221968bdebaa))
+* **pi:** block paths spelled with @, unicode spaces or file urls ([3bfa8f9](https://github.com/espadat-studio/motus/commit/3bfa8f9ab7f0b381ff462cd20ee0cb7692afe2ec))
+* **pi:** clear raw fields when redaction fails ([#84](https://github.com/espadat-studio/motus/issues/84)) ([b63defe](https://github.com/espadat-studio/motus/commit/b63defe25b418bc4381d2e3f42e7cb416d0f413a))
+* **pi:** hold prompts until secrets load ([#78](https://github.com/espadat-studio/motus/issues/78)) ([7888ac9](https://github.com/espadat-studio/motus/commit/7888ac9c51494e877a0a99045f2af9ff84008cba))
+* **pi:** normalize path arguments like pi ([#74](https://github.com/espadat-studio/motus/issues/74)) ([3bfa8f9](https://github.com/espadat-studio/motus/commit/3bfa8f9ab7f0b381ff462cd20ee0cb7692afe2ec))
+* **pi:** report load warnings on stderr without a ui ([#80](https://github.com/espadat-studio/motus/issues/80)) ([8f632db](https://github.com/espadat-studio/motus/commit/8f632db33fc972e34d045e41de3eae69e5567629))
+* **sources:** treat semicolon and hash database urls as secret ([#71](https://github.com/espadat-studio/motus/issues/71)) ([9174123](https://github.com/espadat-studio/motus/commit/917412390955bd5d88bc7bb3610b8f5d77320e29))
+
 ## [1.3.0](https://github.com/espadat-studio/motus/compare/v1.2.0...v1.3.0) (2026-11-02)
 
 
