@@ -260,6 +260,7 @@ describe('paths', () => {
   test('expands and resolves entries', () => {
     assert.deepEqual(blockPaths, [
       join(home, '.config/mise/age.txt'),
+      join(home, 'link'),
       join(home, 'store'),
       join(home, 'missing/dir'),
     ])
@@ -277,7 +278,10 @@ describe('paths', () => {
   })
 
   test('ignores the fallback of a set variable', () => {
-    assert.deepEqual(resolveBlockPaths(['${PA_DIR:-/fallback}/x'], env), [join(home, 'store/x')])
+    assert.deepEqual(resolveBlockPaths(['${PA_DIR:-/fallback}/x'], env), [
+      join(home, 'link/x'),
+      join(home, 'store/x'),
+    ])
   })
 
   test('throws on a relative entry', () => {
@@ -317,6 +321,43 @@ describe('paths', () => {
         assert.ok(checkBashPaths(command, blockPaths, home))
       })
     }
+
+    describe('configured spelling of a symlinked entry', () => {
+      const outside = realpathSync(mkdtempSync(join(tmpdir(), 'motus-out-')))
+      after(() => rmSync(outside, { recursive: true }))
+      mkdirSync(join(outside, 'dots/inner'), { recursive: true })
+      writeFileSync(join(outside, 'dots/inner/secret'), 'fixture')
+      writeFileSync(join(outside, 'file'), 'fixture')
+      symlinkSync(join(outside, 'dots'), join(home, 'dots'))
+      symlinkSync(join(outside, 'file'), join(home, 'filelink'))
+      mkdirSync(join(home, 'mid'))
+      symlinkSync(join(outside, 'dots/inner'), join(home, 'mid/inner'))
+      const linked = resolveBlockPaths(['~/dots/inner/secret', '~/filelink', '~/mid/inner/secret', '~/dots'], env)
+      const cases = [
+        'cat ~/dots/inner/secret',
+        'cat ~/filelink',
+        'cat ~/mid/inner/secret',
+        'cat ~/dots/inner',
+        'cat $HOME/dots/inner/secret',
+        'cat "${HOME}/filelink"',
+        `cat ${home}/mid/inner/secret`,
+        `cat ${outside}/file`,
+        `cat ${outside}/dots/inner/secret`,
+      ]
+      for (const command of cases) {
+        test(`blocks ${command}`, () => {
+          assert.ok(checkBashPaths(command, linked, home))
+        })
+      }
+
+      test('blocks the lexical home spelling when home is a symlink', () => {
+        const alias = join(outside, 'home-alias')
+        symlinkSync(home, alias)
+        const aliased = resolveBlockPaths(['~/dots/inner/secret'], { HOME: alias })
+        assert.ok(checkBashPaths(`cat ${alias}/dots/inner/secret`, aliased, alias))
+        assert.ok(checkBashPaths('cat ~/dots/inner/secret', aliased, alias))
+      })
+    })
 
     test('allows unrelated paths', () => {
       assert.equal(checkBashPaths('cat ~/.config/mise/config.toml', blockPaths, home), undefined)

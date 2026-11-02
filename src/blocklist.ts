@@ -53,11 +53,13 @@ export function checkCommand(command: string, blockCommands: readonly string[]):
 }
 
 export function resolveBlockPaths(entries: readonly string[], env: NodeJS.ProcessEnv): string[] {
-  return entries.map((entry) => {
+  const paths = entries.flatMap((entry) => {
     const expanded = expandPath(entry, env, 'blockPaths entry')
     if (!isAbsolute(expanded)) throw new Error(`blockPaths entry "${entry}" is not absolute after expansion`)
-    return resolveRealpath(resolve(expanded))
+    const configured = resolve(expanded)
+    return [configured, resolveRealpath(configured)]
   })
+  return [...new Set(paths)]
 }
 
 export function checkPath(arg: string, cwd: string, blockPaths: readonly string[], home: string): string | undefined {
@@ -375,7 +377,8 @@ function resolveRealpath(path: string): string {
 }
 
 function listSpellings(path: string, home: string, realHome: string): string[] {
-  if (!path.startsWith(realHome + sep)) return [path]
-  const relative = path.slice(realHome.length)
+  const root = [realHome, home].find((candidate) => path.startsWith(candidate + sep))
+  if (root === undefined) return [path]
+  const relative = path.slice(root.length)
   return [path, ...[...HOME_PREFIXES, home].map((prefix) => prefix + relative)]
 }
