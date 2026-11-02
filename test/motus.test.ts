@@ -156,6 +156,33 @@ describe('degraded state', () => {
     assert.ok(!existsSync(join(home, 'made')))
   })
 
+  test('names each failed required source with its reason in tool and ! blocks', async () => {
+    const { emit, home } = await setup({
+      sources: [
+        { type: 'command', id: 'slow', command: 'sleep 5', timeoutMs: 50 },
+        { type: 'command', id: 'broken', command: 'exit 3' },
+        { type: 'command', id: 'optional', command: 'exit 4', required: false },
+      ],
+    })
+    const expected = 'required source failed: slow (timed out after 50 ms), broken (exited with code 3)'
+    const tool = (await emit('tool_call', { toolName: 'grep', input: {} })) as { reason: string }
+    assert.ok(tool.reason.includes(`session is degraded (${expected})`), tool.reason)
+    const bash = (await emit('user_bash', { command: 'ls', cwd: home, excludeFromContext: false })) as {
+      result: { output: string }
+    }
+    assert.ok(bash.result.output.includes(`session is degraded (${expected})`), bash.result.output)
+    assert.ok(!tool.reason.includes('optional'))
+  })
+
+  test('names a config failure with its reason', async () => {
+    const { emit } = await setup({ blockPaths: ['$MOTUS_UNSET/x'] })
+    const { reason } = (await emit('tool_call', { toolName: 'ls', input: {} })) as { reason: string }
+    assert.match(
+      reason,
+      /required source failed: config \(blockPaths entry "\$MOTUS_UNSET\/x": \$MOTUS_UNSET is not set or empty\)/,
+    )
+  })
+
   test('/motus continue unblocks tools but not blocks', async () => {
     const { emit, motus, notes } = await setup(failing)
     await motus('continue')
