@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.2](https://github.com/espadat-studio/motus/compare/v1.3.1...v1.3.2) (2026-11-02)
+
+
+### Bug Fixes
+
+* **pi:** show why a required source failed in the degraded message ([#95](https://github.com/espadat-studio/motus/issues/95)) ([ffe5daf](https://github.com/espadat-studio/motus/commit/ffe5dafc72971a75191bb69347ae7eb4e00d7bc0)), closes [#92](https://github.com/espadat-studio/motus/issues/92)
+* **sources:** make timeoutMs an idle deadline reset by progress ([#93](https://github.com/espadat-studio/motus/issues/93)) ([01bd1ee](https://github.com/espadat-studio/motus/commit/01bd1ee2b4aba59eece57f9d8672d03c7c880607)), closes [#91](https://github.com/espadat-studio/motus/issues/91)
+
 ## [1.3.1](https://github.com/espadat-studio/motus/compare/v1.3.0...v1.3.1) (2026-11-02)
 
 
