@@ -10,7 +10,7 @@
 
 An agent that runs `env`, `cat .env` or [`forge -vvvv`](https://book.getfoundry.sh/forge/) sends every value it prints to the model provider. In [pi](https://github.com/earendil-works/pi) it also lands in the session files, where memory tools copy it again. motus loads your secrets at session start and replaces each exact value with `[REDACTED:NAME]` before output leaves the tool. It also blocks the commands and files that print secrets in the first place.
 
-- **[pi](https://github.com/earendil-works/pi)**: redaction plus blocks. Covers tool results, saved messages, prompts, `!` shell commands and the provider request.
+- **[pi](https://github.com/earendil-works/pi)**: redaction plus blocks. Covers tool results, saved messages, prompts, `!` shell commands and the provider request. A `!` or `!!` command that holds a loaded value is refused: pi would save the command raw. Reference the secret by variable name.
 - **Claude Code**: blocks only, through a `PreToolUse` hook. Claude Code ignores output rewrites for Bash, so there is nothing to redact with.
 - **Five sources**: `env`, `command`, [`mise`](https://mise.jdx.dev), [`pa`](https://passwordass.org) and [`1password`](https://1password.com). One TOML file configures all of it.
 - **Web3 safe**: no entropy or hex rules, so tx hashes, addresses and storage slots pass through untouched.

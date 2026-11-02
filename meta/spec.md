@@ -26,7 +26,7 @@ _Status: 1.0 scope. Terms are defined in `CONTEXT.md`._
 | D13 | Own repo; publish to npm later                                                                                                                                                                                    | Testable, creditable, and the gap is real (fail-closed, command sources, web3-safe defaults)                                                                                                                                            |
 | D14 | Don't strip secrets from `process.env`. Child processes keep inheriting them                                                                                                                                      | Stripping breaks tools that need them (`forge` RPC URLs). Redaction covers accidental leaks; removing inheritance is the hostile-agent fix                                                                                              |
 | D15 | Every string in every persisted or provider-bound structure is redacted, not chosen fields                                                                                                                        | pi persists tool-result `details` (edit `diff`/`patch` carry file context) and tool-call args. Field lists rot                                                                                                                          |
-| D16 | `!cmd` and `!!cmd` get blocks and redaction                                                                                                                                                                       | pi writes `bashExecution` output (even `!!`) to the session JSONL without `message_end`. The human reads raw values in their own terminal                                                                                               |
+| D16 | `!cmd` and `!!cmd` get blocks and redaction. A command holding a loaded value is refused (handler throws)                                                                                                         | pi writes `bashExecution` output (even `!!`) to the session JSONL without `message_end`. The command text is recorded raw and no hook can change it: only a throw skips recording. The human reads raw values in their own terminal     |
 | D17 | Block `write`, `edit` and `bash` input containing `[REDACTED:<name>]` for a loaded secret name                                                                                                                    | Otherwise the model writes placeholders over real secrets on disk, or commits them                                                                                                                                                      |
 | D18 | Degraded state blocks every tool except a configurable allowlist (empty by default)                                                                                                                               | Any tool output can carry secrets: grep, find, edit diffs, codemode, subagents, MCP                                                                                                                                                     |
 | D19 | Block only what redaction can't cover. pi blocks `blockCommands`; CC additionally blocks `claudeCode.blockCommands` (`env`, `printenv`, `mise env`, `cat .env*`)                                                  | pi redacts loaded values, so blocking `mise env` there only costs usability. CC has no redaction                                                                                                                                        |
@@ -44,7 +44,8 @@ flowchart LR
   end
   TC[tool_call] -->|blocked path, command or placeholder| BLK[block with reason]
   TC -->|degraded and tool not allowlisted| BLK
-  UB[user_bash] -->|blocked| BLK
+  UB[user_bash] -->|holds loaded value| REF[throw: not run, not recorded]
+  UB -->|blocked| BLK
   UB --> RED
   TR[tool_result] --> RED[redact every string]
   ME[message_end] --> RED
@@ -55,15 +56,15 @@ flowchart LR
 
 ### pi events
 
-| Event                     | Job                                                                                                                                                                       |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `session_start`           | Load sources into memory. Set degraded state. Notify counts, never values                                                                                                 |
-| `tool_call`               | Block paths, commands (see Blocking) and placeholders for loaded names in `write`/`edit`/`bash` input (D17). While degraded, block every tool not in `degradedAllowTools` |
-| `tool_result`             | Redact every string in `content`, `structuredContent` and `details`. Return all three (replacing `content` alone drops `structuredContent`)                               |
-| `message_end`             | Redact every string of the finalized message, any role, including tool-call args and custom messages                                                                      |
-| `input`                   | Redact secrets pasted into prompts before they're saved                                                                                                                   |
-| `user_bash`               | Apply blocks. Otherwise run the command with `createLocalBashOperations`, redact the full output and return `result`. No live streaming for `!` commands                  |
-| `before_provider_request` | Walk the parsed payload and redact each string (never the serialized JSON). On internal error, send an empty payload rather than raw (pattern from `pi-redact`)           |
+| Event                     | Job                                                                                                                                                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session_start`           | Load sources into memory. Set degraded state. Notify counts, never values                                                                                                                                 |
+| `tool_call`               | Block paths, commands (see Blocking) and placeholders for loaded names in `write`/`edit`/`bash` input (D17). While degraded, block every tool not in `degradedAllowTools`                                 |
+| `tool_result`             | Redact every string in `content`, `structuredContent` and `details`. Return all three (replacing `content` alone drops `structuredContent`)                                                               |
+| `message_end`             | Redact every string of the finalized message, any role, including tool-call args and custom messages                                                                                                      |
+| `input`                   | Redact secrets pasted into prompts before they're saved                                                                                                                                                   |
+| `user_bash`               | Throw first if the command holds a loaded value. Apply blocks. Otherwise run the command with `createLocalBashOperations`, redact the full output and return `result`. No live streaming for `!` commands |
+| `before_provider_request` | Walk the parsed payload and redact each string (never the serialized JSON). On internal error, send an empty payload rather than raw (pattern from `pi-redact`)                                           |
 
 Verified in pi 1.4.0 source: `tool_result` changes reach the `toolResult` message that `message_end` persists, and memsearch reads persisted entries. `tool_execution_update` streaming and bash's truncation temp file (`/tmp/pi-bash-*`) hold raw output locally; acceptable, since neither reaches the model unredacted.
 
