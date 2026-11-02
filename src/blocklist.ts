@@ -17,6 +17,7 @@ const HOME_PREFIXES = ['~', '$HOME', '${HOME}', '"$HOME"', '"${HOME}"']
 const ASSIGNMENT = /^[A-Za-z_]\w*=/
 const SCRIPT_FLAG = /^-[a-z]*c[a-z]*$/
 const PLACEHOLDER = /\[REDACTED:([^\]\s]+)\]/g
+const FILE_URL = /^file:/i
 const TILDE = /^~(?=\/|$)/
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g
 const PATH_CONTINUES = '(?![\\w.-])'
@@ -73,11 +74,22 @@ export function checkPath(arg: string, cwd: string, blockPaths: readonly string[
 export function normalizePiPath(arg: string, home: string): string {
   const unspaced = arg.replace(UNICODE_SPACES, ' ')
   const path = (unspaced.startsWith('@') ? unspaced.slice(1) : unspaced).replace(TILDE, home)
-  if (!path.startsWith('file:')) return path
+  if (!FILE_URL.test(path)) return path
   try {
     return fileURLToPath(path)
   } catch {
     return path
+  }
+}
+
+export function checkFileUrl(arg: string, home: string): string | undefined {
+  const path = normalizePiPath(arg, home)
+  if (!FILE_URL.test(path)) return undefined
+  try {
+    fileURLToPath(path)
+    return undefined
+  } catch {
+    return `cannot compare unparseable file URL "${arg}" with blockPaths`
   }
 }
 

@@ -192,9 +192,28 @@ describe('tool_call', () => {
     assert.ok(await emit('tool_call', { toolName: 'write', input: { path: '@~/vault/new', content: 'x' } }))
   })
 
-  test('single-line write content and bad file URLs do not throw', async () => {
+  test('blocks file URL spellings of a blocked path, nested included', async () => {
+    const { emit, home } = await setup(config)
+    const urls = [
+      `file://${home}/vault/key`,
+      `FILE://${home}/vault/key`,
+      `file://localhost${home}/vault/key`,
+      `file://${home}/va%75lt/key`,
+    ]
+    for (const uri of urls) {
+      assert.ok(await emit('tool_call', { toolName: 'read_mcp_resource', input: { uri } }), uri)
+      const input = { code: 'x', args: { calls: [{ tool: 'fs_read', args: { uri } }] } }
+      assert.ok(await emit('tool_call', { toolName: 'codemode', input }), uri)
+    }
+  })
+
+  test('blocks unparseable file URLs, including single-line write content', async () => {
     const { emit } = await setup(config)
-    for (const content of ['hello', 'file://%zz', 'file:', '@'])
+    const uri = 'file://%zz'
+    const reason = await emit('tool_call', { toolName: 'read_mcp_resource', input: { uri } })
+    assert.match(JSON.stringify(reason), /unparseable file URL/)
+    assert.ok(await emit('tool_call', { toolName: 'write', input: { path: 'notes.md', content: 'file://%zz' } }))
+    for (const content of ['hello', '@', 'see file: x'])
       assert.equal(await emit('tool_call', { toolName: 'write', input: { path: 'notes.md', content } }), undefined)
   })
 

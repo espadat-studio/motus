@@ -12,6 +12,7 @@ import {
 import {
   checkBashPaths,
   checkCommand,
+  checkFileUrl,
   checkPath,
   checkPlaceholders,
   normalizePiPath,
@@ -72,7 +73,8 @@ export function createMotus(
       if (isToolCallEventType('bash', event)) return checkShellCommand(event.input.command)
       for (const text of collectStrings(event.input)) {
         if (text.length > MAX_PATH_LENGTH || text.includes('\n')) continue
-        const reason = checkPath(text, cwd, state.blockPaths, home)
+        const reason = checkFileUrl(text, home)
+          || checkPath(text, cwd, state.blockPaths, home)
           || checkPath(normalizePiPath(text, home), cwd, state.blockPaths, home)
         if (reason) return reason
       }
