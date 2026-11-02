@@ -18,11 +18,23 @@ const SCRIPT_FLAG = /^-[a-z]*c[a-z]*$/
 const PLACEHOLDER = /\[REDACTED:([^\]\s]+)\]/g
 const TILDE = /^~(?=\/|$)/
 const PATH_CONTINUES = '(?![\\w.-])'
+const REDIRECT = /^(?:&>>|&>|>>|>\||>&|<&|>|<)/
+const FD_NUMBER = /^(?:\d+|-)$/
 
 interface Heredoc {
   delimiter: string
   isQuoted: boolean
   shouldStripTabs: boolean
+}
+
+interface SimpleCommand {
+  words: string[]
+  targets: string[]
+}
+
+interface Redirect {
+  length: number
+  isDuplication: boolean
 }
 
 class ParseError extends Error {}
@@ -75,11 +87,11 @@ export function checkPlaceholders(input: string, loadedNames: ReadonlySet<string
 function* listSimpleCommands(source: string): Generator<string[]> {
   const bodies: string[] = []
   const commands = splitCommands(source, bodies)
-  for (const words of commands) {
+  for (const { words, targets } of commands) {
     const command = skipPrefixes(words)
     const name = command[0]
     if (name === undefined) continue
-    yield command
+    yield [...command, ...targets]
     if (basename(name) === 'eval') yield* listSimpleCommands(command.slice(1).join(' '))
     if (!SHELLS.has(basename(name))) continue
     const flag = command.findIndex((word, index) => index > 0 && SCRIPT_FLAG.test(word))
@@ -87,7 +99,7 @@ function* listSimpleCommands(source: string): Generator<string[]> {
     const script = command[flag + 1] === '--' ? command[flag + 2] : command[flag + 1]
     if (script !== undefined) yield* listSimpleCommands(script)
   }
-  if (!commands.some(runsScript)) return
+  if (!commands.some(({ words }) => runsScript(words))) return
   for (const body of bodies) yield* listSimpleCommands(body)
 }
 
@@ -116,19 +128,27 @@ function skipPrefixes(words: string[]): string[] {
   return words.slice(isWrapperTheCommand ? lastWrapper : index)
 }
 
-function splitCommands(source: string, bodies: string[]): string[][] {
-  const commands: string[][] = []
+function splitCommands(source: string, bodies: string[]): SimpleCommand[] {
+  const commands: SimpleCommand[] = []
   let words: string[] = []
+  let targets: string[] = []
   let word: string | undefined
+  let redirect: Redirect | undefined
   let heredocs: Heredoc[] = []
   const endWord = (): void => {
-    if (word !== undefined) words.push(word)
+    if (word !== undefined) {
+      if (redirect === undefined) words.push(word)
+      else if (!redirect.isDuplication || !FD_NUMBER.test(word)) targets.push(word)
+      redirect = undefined
+    }
     word = undefined
   }
   const endCommand = (): void => {
     endWord()
-    if (words.length > 0) commands.push(words)
+    redirect = undefined
+    if (words.length > 0) commands.push({ words, targets })
     words = []
+    targets = []
   }
   const substitute = ([start, end]: [number, number]): number => {
     commands.push(...splitCommands(source.slice(start, end), bodies))
@@ -139,6 +159,7 @@ function splitCommands(source: string, bodies: string[]): string[][] {
   for (let index = 0; index < source.length; index++) {
     const char = source[index] ?? ''
     const substitution = findSubstitution(source, index)
+    const operator = readRedirect(source, index)
     if (substitution !== undefined)
       index = substitute(substitution)
     else if (source.startsWith('((', index)) {
@@ -186,6 +207,11 @@ function splitCommands(source: string, bodies: string[]): string[][] {
           word += source[index]
         }
       }
+    } else if (operator !== undefined) {
+      if (char === '&' || word === undefined || !/^\d+$/.test(word)) endWord()
+      word = undefined
+      redirect = operator
+      index += operator.length - 1
     } else if (char === ' ' || char === '\t')
       endWord()
     else if (SEPARATORS.has(char))
@@ -195,6 +221,13 @@ function splitCommands(source: string, bodies: string[]): string[][] {
   }
   endCommand()
   return commands
+}
+
+function readRedirect(source: string, index: number): Redirect | undefined {
+  if (!'<>&'.includes(source[index] ?? '')) return undefined
+  const operator = REDIRECT.exec(source.slice(index, index + 3))?.[0]
+  if (operator === undefined || source[index + operator.length] === '(') return undefined
+  return { length: operator.length, isDuplication: operator.endsWith('&') && operator.length === 2 }
 }
 
 function findSubstitution(source: string, index: number): [number, number] | undefined {
@@ -281,8 +314,8 @@ function isTerminator(line: string, { delimiter, shouldStripTabs }: Heredoc): bo
   return (shouldStripTabs ? line.replace(/^\t+/, '') : line) === delimiter
 }
 
-function listBodySubstitutions(body: string, bodies: string[]): string[][] {
-  const commands: string[][] = []
+function listBodySubstitutions(body: string, bodies: string[]): SimpleCommand[] {
+  const commands: SimpleCommand[] = []
   for (let index = 0; index < body.length; index++) {
     const substitution = findSubstitution(body, index)
     if (body[index] === '\\') index++

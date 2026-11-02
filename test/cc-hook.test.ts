@@ -58,6 +58,12 @@ describe('runHook', () => {
     ['Bash', { command: '# ((\npa show x' }],
     ['Bash', { command: "echo $(# it's\npa show x)" }],
     ['Bash', { command: 'true && \\\npa show x' }],
+    ['Bash', { command: 'env 2>&1 | grep KEY' }],
+    ['Bash', { command: 'env 2>/dev/null | grep KEY' }],
+    ['Bash', { command: 'env >&2' }],
+    ['Bash', { command: 'nohup env 2>&1' }],
+    ['Bash', { command: 'command env 2>&1' }],
+    ['Bash', { command: 'cat <.env' }],
     ['Read', { file_path: join(home, '.config/mise/age.txt') }],
     ['Read', { file_path: '.config/mise/age.txt' }],
   ]
@@ -74,6 +80,7 @@ describe('runHook', () => {
     ['Bash', { command: 'gh issue comment 1 --body "$(cat <<\'EOF\'\nrun `env`, not $(pa show x)\nEOF\n)"' }],
     ['Bash', { command: '# cat <<EOF\nls' }],
     ['Bash', { command: 'echo a#b $#' }],
+    ['Bash', { command: 'env FOO=1 ls 2>&1' }],
     ['Read', { file_path: join(home, '.config/mise/config.toml') }],
     ['Grep', { pattern: 'x' }],
     ['Edit', { file_path: join(home, 'a.ts'), old_string: 'env', new_string: 'printenv' }],
@@ -133,6 +140,11 @@ describe('motus-cc-hook bin', () => {
 
   test('denies a blocked command after a line continuation', () => {
     const { stdout } = run(toolUse('Bash', { command: 'true && \\\nenv' }))
+    assert.match(denyReason(stdout) ?? '', /"env"/)
+  })
+
+  test('denies a redirected blocked command', () => {
+    const { stdout } = run(toolUse('Bash', { command: 'env 2>&1 | grep KEY' }))
     assert.match(denyReason(stdout) ?? '', /"env"/)
   })
 
