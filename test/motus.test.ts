@@ -305,6 +305,55 @@ describe('redaction', () => {
   })
 })
 
+describe('summarization hooks', () => {
+  const preparation = () => ({
+    messagesToSummarize: [{ role: 'user', content: `key ${TOKEN}` }],
+    turnPrefixMessages: [{ role: 'user', content: `key ${TOKEN}` }],
+    previousSummary: `old ${TOKEN}`,
+  })
+
+  test('compaction redacts every summarized input in place', async () => {
+    const { emit } = await setup()
+    const prep = preparation()
+    assert.equal(
+      await emit('session_before_compact', { preparation: prep, customInstructions: 'focus on tests' }),
+      undefined,
+    )
+    assert.ok(!JSON.stringify(prep).includes(TOKEN))
+    assert.match(prep.previousSummary, /\[REDACTED:API_TOKEN\]/)
+  })
+
+  test('compaction cancels when instructions hold a loaded value', async () => {
+    const { emit, notes } = await setup()
+    const result = await emit('session_before_compact', { preparation: preparation(), customInstructions: TOKEN })
+    assert.deepEqual(result, { cancel: true })
+    assert.ok(!notes.at(-1)?.message.includes(TOKEN))
+  })
+
+  test('compaction cancels on redaction failure', async () => {
+    const { emit } = await setup()
+    const prep = { ...preparation(), messagesToSummarize: [cyclic()] }
+    assert.deepEqual(await emit('session_before_compact', { preparation: prep }), { cancel: true })
+  })
+
+  test('branch summary redacts the existing entries array and instructions', async () => {
+    const { emit } = await setup()
+    const entriesToSummarize = [{ type: 'message', message: { role: 'user', content: TOKEN } }]
+    const result = await emit('session_before_tree', {
+      preparation: { entriesToSummarize, customInstructions: `use ${TOKEN}` },
+    })
+    assert.ok(!JSON.stringify(entriesToSummarize).includes(TOKEN))
+    assert.deepEqual(result, { customInstructions: 'use [REDACTED:API_TOKEN]' })
+  })
+
+  test('branch summary cancels on redaction failure', async () => {
+    const { emit } = await setup()
+    assert.deepEqual(await emit('session_before_tree', { preparation: { entriesToSummarize: [cyclic()] } }), {
+      cancel: true,
+    })
+  })
+})
+
 describe('user_bash with a loaded value', () => {
   const REFUSED = /Reference it by variable name/
 

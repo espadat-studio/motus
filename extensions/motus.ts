@@ -128,6 +128,35 @@ export function createMotus(
       }
     })
 
+    pi.on('session_before_compact', (event, ctx) => {
+      try {
+        const { customInstructions, preparation } = event
+        if (customInstructions && state.matcher.redact(customInstructions) !== customInstructions) {
+          ctx.ui.notify('motus: compaction cancelled: the instructions hold a loaded secret value', 'error')
+          return { cancel: true }
+        }
+        preparation.messagesToSummarize = state.matcher.redact(preparation.messagesToSummarize)
+        preparation.turnPrefixMessages = state.matcher.redact(preparation.turnPrefixMessages)
+        if (preparation.previousSummary !== undefined)
+          preparation.previousSummary = state.matcher.redact(preparation.previousSummary)
+        return undefined
+      } catch {
+        return { cancel: true }
+      }
+    })
+
+    pi.on('session_before_tree', (event) => {
+      try {
+        const { entriesToSummarize, customInstructions } = event.preparation
+        entriesToSummarize.splice(0, entriesToSummarize.length, ...state.matcher.redact([...entriesToSummarize]))
+        return customInstructions === undefined
+          ? undefined
+          : { customInstructions: state.matcher.redact(customInstructions) }
+      } catch {
+        return { cancel: true }
+      }
+    })
+
     pi.registerCommand('motus', {
       description: 'motus status | continue',
       handler: async (args, ctx) => {
