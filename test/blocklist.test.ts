@@ -7,6 +7,7 @@ import { after, describe, test } from 'node:test'
 import {
   checkBashPaths,
   checkCommand,
+  checkFileUrl,
   checkPath,
   checkPlaceholders,
   normalizePiPath,
@@ -322,9 +323,18 @@ describe('paths', () => {
       ['file:///a/b%20c', '/a/b c'],
       ['@file:///a', '/a'],
       ['file://%zz', 'file://%zz'],
+      ['FILE:///a/b', '/a/b'],
+      ['file://localhost/a', '/a'],
     ]
     for (const [arg, expected] of cases)
       test(`maps ${JSON.stringify(arg)}`, () => assert.equal(normalizePiPath(arg, home), expected))
+  })
+
+  describe('checkFileUrl', () => {
+    for (const arg of ['file://%zz', 'file://remote/a', 'file:///a%2Fb', '@FILE://%zz'])
+      test(`blocks ${arg}`, () => assert.match(checkFileUrl(arg, home) ?? '', /unparseable file URL/))
+    for (const arg of ['file:///a', 'FILE://localhost/a', 'notes.md', 'xfile:%zz'])
+      test(`allows ${arg}`, () => assert.equal(checkFileUrl(arg, home), undefined))
   })
 
   describe('checkBashPaths', () => {
