@@ -357,6 +357,96 @@ describe('miseSource', () => {
   })
 })
 
+describe('miseSource conf.d, .config/mise/mise.toml and [vars]', () => {
+  const AGE = '[env]\nP_TOKEN = { age = "fixture-ciphertext" }\n'
+  const STUB_JSON = { 'p/mise-stub.json': '{"P_TOKEN":"fixture-p-token-0001"}', list: '# empty\n' }
+  const layouts = [
+    '.config/mise/conf.d/a.toml',
+    '.config/mise/conf.d/config.prod.toml',
+    '.mise/conf.d/mise.team.toml',
+    'mise/conf.d/a.toml',
+    '.config/mise/mise.toml',
+  ]
+
+  for (const layout of layouts) {
+    test(`discovers ${layout} with MISE_ENV unset, warns and loads`, async () => {
+      const { home, env } = await fixture({ ...STUB_JSON, [`p/${layout}`]: AGE })
+      const source = miseSource('mise', '~/list', env)
+      assert.equal(await source.appliesTo({ cwd: join(home, 'p') }), true)
+      const warnings: string[] = []
+      const secrets = await load(home, env, 'p', warnings)
+      assert.deepEqual(secrets, [{ name: 'P_TOKEN', value: 'fixture-p-token-0001', source: 'mise' }])
+      assert.deepEqual(warnings, [`${home}/p/${layout} has age keys missing from ~/list: P_TOKEN`])
+    })
+  }
+
+  test('keeps an unselected .config/mise/config.prod.toml inactive', async () => {
+    const { home, env } = await fixture({ ...STUB_JSON, 'p/.config/mise/config.prod.toml': AGE })
+    assert.equal(await miseSource('mise', '~/list', env).appliesTo({ cwd: join(home, 'p') }), false)
+  })
+
+  test('treats a cwd named conf.d as an ordinary project', async () => {
+    const { home, env } = await fixture({
+      list: '# empty\n',
+      'conf.d/mise.toml': AGE,
+      'conf.d/mise.prod.toml': '[env]\nQ_TOKEN = { age = "fixture-ciphertext" }\n',
+      'conf.d/mise-stub.json': '{"P_TOKEN":"fixture-p-token-0001"}',
+    })
+    const warnings: string[] = []
+    const secrets = await load(home, env, 'conf.d', warnings)
+    assert.deepEqual(secrets.map(({ name }) => name), ['P_TOKEN'])
+    assert.deepEqual(warnings, [`${home}/conf.d/mise.toml has age keys missing from ~/list: P_TOKEN`])
+  })
+
+  test('ignores hidden conf.d files', async () => {
+    const { home, env } = await fixture({ ...STUB_JSON, 'p/.mise/conf.d/.hidden.toml': 'not = [toml' })
+    assert.equal(await miseSource('mise', '~/list', env).appliesTo({ cwd: join(home, 'p') }), false)
+    assert.deepEqual(await load(home, env, 'p'), [])
+  })
+
+  test('degrades the session when a listed conf.d file has a bad age value', async () => {
+    const { home, env } = await fixture({
+      list: '~/p/.mise/conf.d/a.toml\n',
+      'p/.mise/conf.d/a.toml': AGE,
+      'p/mise-stub.json': '{}',
+    })
+    await assert.rejects(load(home, env, 'p'), (error: unknown) => {
+      assert.ok(error instanceof PartialLoadError)
+      assert.equal(error.message, `${home}/p/.mise/conf.d/a.toml failed: mise env did not output P_TOKEN`)
+      return true
+    })
+  })
+
+  test('decrypts [vars] age values of a listed file through the temp config', async () => {
+    const { home, env } = await fixture({
+      list: '~/p/mise.toml\n',
+      'p/mise.toml': '[vars]\nV_TOKEN = { age = "fixture-task-v" }\n[env]\nUSES = "{{ vars.V_TOKEN }}"\n',
+    })
+    assert.equal(await miseSource('mise', '~/list', env).appliesTo({ cwd: join(home, 'p') }), true)
+    const secrets = await load(home, env, 'p')
+    assert.deepEqual(secrets, [{ name: 'V_TOKEN', value: 'plain-fixture-task-v', source: 'mise' }])
+    await assertTempDirsGone(home)
+  })
+
+  test('does not decrypt [vars] age values of an unlisted file', async () => {
+    const { home, env } = await fixture({
+      list: '# empty\n',
+      'p/.mise/conf.d/a.toml': '[vars]\nV_TOKEN = { age = "fixture-task-v" }\n',
+    })
+    const warnings: string[] = []
+    await assert.rejects(load(home, env, 'p', warnings), (error: unknown) => {
+      assert.ok(error instanceof PartialLoadError)
+      assert.equal(
+        error.message,
+        `${home}/p/.mise/conf.d/a.toml failed: cannot decrypt task env keys V_TOKEN: not in listFile`,
+      )
+      return true
+    })
+    assert.deepEqual(warnings, [`${home}/p/.mise/conf.d/a.toml has age keys missing from ~/list: V_TOKEN`])
+    await assert.rejects(access(join(home, 'temp-dirs')), { code: 'ENOENT' })
+  })
+})
+
 describe('miseSource file tasks', () => {
   const taskDirs = ['mise-tasks', '.mise-tasks', 'mise/tasks', '.mise/tasks', '.config/mise/tasks']
 

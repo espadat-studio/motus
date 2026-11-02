@@ -11,12 +11,17 @@ import { PartialLoadError, type Secret, type SecretSource } from '../sources.ts'
 const run = promisify(execFile)
 const BARE_KEY = /^[\w-]+$/
 const ENV_FILE = /^\.?(?:mise|config)\.([\w-]+)(?:\.local)?\.toml$/
+const CONF_D = /(?:^|\/)(?:\.config\/mise|\.mise|mise)\/conf\.d$/
+const CONF_D_FILE = /^[^.].*\.toml$/
 const CANDIDATES: [string, RegExp][] = [
   ['', /^\.?mise(\.[\w-]+)*\.toml$/],
   ['.config', /^mise(\.[\w-]+)*\.toml$/],
   ['.mise', /^config(\.[\w-]+)*\.toml$/],
   ['mise', /^config(\.[\w-]+)*\.toml$/],
-  ['.config/mise', /^config(\.[\w-]+)*\.toml$/],
+  ['.config/mise', /^(?:config|mise)(\.[\w-]+)*\.toml$/],
+  ['.config/mise/conf.d', CONF_D_FILE],
+  ['.mise/conf.d', CONF_D_FILE],
+  ['mise/conf.d', CONF_D_FILE],
 ]
 const TASK_DIRS = ['mise-tasks', '.mise-tasks', 'mise/tasks', '.mise/tasks', '.config/mise/tasks']
 const TASK_HEADER = /^#\s*(?:MISE|\[MISE\]) (.*)$/
@@ -26,7 +31,7 @@ const BAD_OUTPUT = 'mise env output is not a JSON object of strings'
 interface AgeKey {
   name: string
   value: Record<string, unknown>
-  table: 'env' | 'task'
+  table: 'env' | 'task' | 'vars'
 }
 
 interface AgeFile {
@@ -115,11 +120,11 @@ async function loadFile(
     }),
   )
   if (keys === undefined) throw new Error('not valid TOML')
-  const miseEnv = ENV_FILE.exec(basename(path))?.[1]
+  const miseEnv = fileEnv(path)
   const { MISE_ENV: _inherited, ...baseEnv } = env
   const childEnv = miseEnv && miseEnv !== 'local' ? { ...baseEnv, MISE_ENV: miseEnv } : baseEnv
   const envKeys = keys.filter(({ table }) => table === 'env')
-  const taskKeys = keys.filter(({ table }) => table === 'task')
+  const taskKeys = keys.filter(({ table }) => table !== 'env')
   const [fromEnv, fromTasks] = await Promise.all([
     loadEnvKeys(id, envKeys, projectRoot(path), childEnv, signal).then(
       (secrets) => ({ secrets, errors: [] }),
@@ -223,8 +228,8 @@ function parseOutput(stdout: string): Record<string, string> {
 
 async function cwdAgeFiles(cwd: string, env: NodeJS.ProcessEnv): Promise<AgeFile[]> {
   const activeEnvs = (env['MISE_ENV'] ?? '').split(',')
-  const isActive = (name: string): boolean => {
-    const miseEnv = ENV_FILE.exec(name)?.[1]
+  const isActive = (path: string): boolean => {
+    const miseEnv = fileEnv(path)
     return !miseEnv || miseEnv === 'local' || activeEnvs.includes(miseEnv)
   }
   const files: AgeFile[] = []
@@ -234,7 +239,7 @@ async function cwdAgeFiles(cwd: string, env: NodeJS.ProcessEnv): Promise<AgeFile
         if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return []
         throw error
       })
-      for (const name of names.filter((name) => pattern.test(name) && isActive(name)).sort()) {
+      for (const name of names.filter((name) => pattern.test(name) && isActive(join(dir, sub, name))).sort()) {
         const path = join(dir, sub, name)
         const keys = ageKeys(await readFile(path, 'utf8'))
         if (keys === undefined || keys.length > 0) files.push({ path, keys })
@@ -303,6 +308,7 @@ function ageKeys(toml: string): AgeKey[] | undefined {
   const tasks = isTable(config['tasks']) ? Object.values(config['tasks']) : []
   return [
     ...envAgeKeys(config['env'], 'env'),
+    ...envAgeKeys(config['vars'], 'vars'),
     ...tasks.flatMap((task) => (isTable(task) ? envAgeKeys(task['env'], 'task') : [])),
   ]
 }
@@ -327,8 +333,23 @@ function inlineToml(value: unknown): string {
   return `{ ${entries.join(', ')} }`
 }
 
+function fileEnv(path: string): string | undefined {
+  return CONF_D.test(dirname(path)) ? undefined : ENV_FILE.exec(basename(path))?.[1]
+}
+
 function projectRoot(path: string): string {
-  const dir = basename(path).startsWith('config') ? dirname(dirname(path)) : dirname(path)
+  const parent = dirname(path)
+  return stripDotConfig(layoutDir(path, parent))
+}
+
+function layoutDir(path: string, parent: string): string {
+  if (CONF_D.test(parent)) return dirname(dirname(parent))
+  const isXdgMise = basename(parent) === 'mise' && basename(dirname(parent)) === '.config'
+  if (basename(path).startsWith('config') || isXdgMise) return dirname(parent)
+  return parent
+}
+
+function stripDotConfig(dir: string): string {
   return basename(dir) === '.config' ? dirname(dir) : dir
 }
 
