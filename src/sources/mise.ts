@@ -57,11 +57,20 @@ export function miseSource(id: string, listFile: string, env: NodeJS.ProcessEnv)
       }
       const files = [...listed, ...drift.map(({ path }) => path)]
       const realCwd = await realpath(cwd)
+      const roots = new Set(listed.map(projectRoot))
       const tasks = await taskFiles([...new Set([...await ancestors(realCwd), ...files.map(projectRoot)])])
       const { MISE_ENV: _inherited, ...baseEnv } = env
       const loads = [
-        ...files.map((path) => ({ path, root: projectRoot(path), load: loadFile(id, path, env, signal) })),
-        ...tasks.map(({ path, root, keys }) => ({ path, root, load: loadTaskFile(id, keys, baseEnv, signal) })),
+        ...files.map((path) => ({
+          path,
+          root: projectRoot(path),
+          load: loadFile(id, path, env, signal, listed.includes(path)),
+        })),
+        ...tasks.map(({ path, root, keys }) => ({
+          path,
+          root,
+          load: loadTaskFile(id, keys, baseEnv, signal, roots.has(root)),
+        })),
       ]
       const outcomes = await Promise.allSettled(loads.map(({ load }) => load))
       const secrets: Secret[] = []
@@ -98,6 +107,7 @@ async function loadFile(
   path: string,
   env: NodeJS.ProcessEnv,
   signal: AbortSignal,
+  approved: boolean,
 ): Promise<FileLoad> {
   const keys = ageKeys(
     await readFile(path, 'utf8').catch(() => {
@@ -115,7 +125,7 @@ async function loadFile(
       (secrets) => ({ secrets, errors: [] }),
       (error: unknown) => ({ secrets: [], errors: [reasonOf(error)] }),
     ),
-    loadTaskKeys(id, taskKeys, childEnv, signal),
+    loadTaskKeys(id, taskKeys, childEnv, signal, approved),
   ])
   return {
     secrets: [...fromEnv.secrets, ...fromTasks.secrets],
@@ -128,9 +138,10 @@ async function loadTaskFile(
   keys: AgeKey[] | undefined,
   env: NodeJS.ProcessEnv,
   signal: AbortSignal,
+  approved: boolean,
 ): Promise<FileLoad> {
   if (keys === undefined) throw new Error('#MISE env header is not valid TOML')
-  return loadTaskKeys(id, keys, env, signal)
+  return loadTaskKeys(id, keys, env, signal, approved)
 }
 
 async function loadEnvKeys(
@@ -154,8 +165,10 @@ async function loadTaskKeys(
   keys: AgeKey[],
   env: NodeJS.ProcessEnv,
   signal: AbortSignal,
+  approved: boolean,
 ): Promise<FileLoad> {
   if (keys.length === 0) return { secrets: [], errors: [] }
+  if (!approved) return { secrets: [], errors: [taskError(keys.map(({ name }) => name), 'not in listFile')] }
   const aliases = keys.map((_, index) => `MOTUS_TASK_ENV_${index}`)
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'motus-mise-')))
   try {

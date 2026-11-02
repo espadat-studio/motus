@@ -36,6 +36,9 @@ function load(home: string, env: NodeJS.ProcessEnv, cwd: string, warnings: strin
   })
 }
 
+const NOT_LISTED = 'cannot decrypt task env keys C_TOKEN: not in listFile'
+const LISTED_C = '~/a/.mise/config.toml\n~/a/.mise/config.prod.toml\n~/b/mise.toml\n~/c/mise.toml\n'
+
 const listed = {
   list: '# managed by rotate-mise-secrets\n\n~/a/.mise/config.toml\n~/a/.mise/config.prod.toml\n~/b/mise.toml\n',
   'a/.mise/config.toml': '[env]\nA_TOKEN = { age = "fixture-ciphertext" }\nPLAIN = "visible"\n',
@@ -242,16 +245,54 @@ describe('miseSource', () => {
     await assertTempDirsGone(home)
   })
 
-  test('counts task env age keys toward appliesTo and drift', async () => {
+  test('counts task env age keys toward appliesTo and drift, but does not decrypt them', async () => {
     const { home, env } = await fixture({
       ...listed,
       'c/mise.toml': '[tasks.dev.env]\nC_TOKEN = { age = "fixture-task-c" }\n',
     })
     assert.equal(await miseSource('mise', '~/list', env).appliesTo({ cwd: join(home, 'c') }), true)
     const warnings: string[] = []
-    const secrets = await load(home, env, 'c/sub', warnings)
-    assert.deepEqual(secrets.at(-1), { name: 'C_TOKEN', value: 'plain-fixture-task-c', source: 'mise' })
+    await assert.rejects(load(home, env, 'c/sub', warnings), (error: unknown) => {
+      assert.ok(error instanceof PartialLoadError)
+      assert.equal(error.message, `${home}/c/mise.toml failed: ${NOT_LISTED}`)
+      assert.deepEqual(error.secrets.map(({ name }) => name), ['A_TOKEN', 'PROD_TOKEN', 'B_TOKEN'])
+      return true
+    })
     assert.deepEqual(warnings, [`${home}/c/mise.toml has age keys missing from ~/list: C_TOKEN`])
+    await assert.rejects(access(join(home, 'temp-dirs')), { code: 'ENOENT' })
+  })
+
+  test('does not decrypt task keys of unlisted content, even under a listed root', async () => {
+    const { home, env } = await fixture({
+      ...listed,
+      'a/mise.toml': '[tasks.x.env]\nR_TOKEN = { age = "fixture-task-r" }\n',
+      'a/mise-tasks/ok': '#MISE env={T_TOKEN={age="fixture-task-t"}}\n',
+      'a/nested/mise-tasks/evil': '#MISE env={N_TOKEN={age="fixture-task-n"}}\n',
+      'home-repo/mise-tasks/evil': '#MISE env={H_TOKEN={age="fixture-task-h"}}\n',
+    })
+    for (const cwd of ['a/src', 'a/nested', 'home-repo']) {
+      await assert.rejects(load(home, env, cwd), (error: unknown) => {
+        assert.ok(error instanceof PartialLoadError)
+        assert.match(error.message, /not in listFile/)
+        assert.ok(!error.secrets.some(({ name }) => /^[NHR]_TOKEN$/.test(name)))
+        return true
+      })
+    }
+    const configs = await readFile(join(home, 'temp-configs'), 'utf8')
+    assert.ok(!/fixture-task-[snrh]"/.test(configs))
+  })
+
+  test('approves task dirs of a listed global config root, not repos below it', async () => {
+    const { home, env } = await fixture({
+      list: '~/.config/mise/config.toml\n',
+      '.config/mise/config.toml': '[env]\nG_TOKEN = { age = "fixture-ciphertext" }\n',
+      'mise-stub.json': '{"G_TOKEN":"fixture-g-token-0001"}',
+      'mise-tasks/dev': '#MISE env={H_TOKEN={age="fixture-task-home"}}\n',
+      'repo/mise-tasks/evil': '#MISE env={E_TOKEN={age="fixture-task-evil"}}\n',
+    })
+    const secrets = await load(home, env, '.')
+    assert.deepEqual(secrets.map(({ name }) => name), ['G_TOKEN', 'H_TOKEN'])
+    await assert.rejects(load(home, env, 'repo'), /repo\/mise-tasks\/evil failed: .*not in listFile/)
   })
 
   test('loads dotted, multi-line and inline age keys of [env] and task env', async () => {
@@ -376,6 +417,8 @@ describe('miseSource file tasks', () => {
   test('fails with the loaded secrets when a file task inside the project fails', async () => {
     const { home, env } = await fixture({
       ...listed,
+      list: LISTED_C,
+      'c/mise.toml': '',
       'c/mise-tasks/deploy': '#MISE env={D_TOKEN={age="fixture-undecryptable"}}\n',
       'c/mise-tasks/bad': '#MISE env={X=\n',
     })
@@ -400,6 +443,8 @@ describe('miseSource file tasks', () => {
   test('applies to a project with only file-task age keys, without drift', async () => {
     const { home, env } = await fixture({
       ...listed,
+      list: LISTED_C,
+      'c/mise.toml': '',
       'c/.config/mise/tasks/dev': '# [MISE] env={C_TOKEN={age="fixture-task-c"}}\n',
     })
     assert.equal(await miseSource('mise', '~/list', env).appliesTo({ cwd: join(home, 'c/sub') }), true)
