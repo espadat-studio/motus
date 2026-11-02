@@ -77,6 +77,38 @@ describe('checkCommand', () => {
   })
 })
 
+describe('checkCommand comments', () => {
+  const blocked = [
+    "# Let's look\npa show x",
+    '# say "hi\npa show x',
+    'true # trailing\npa show x',
+    '# ((\npa show x',
+    "echo $(# it's\npa show x)",
+    'echo $(\n# "x\npa show x\n)',
+  ]
+  for (const command of blocked) {
+    test(`blocks ${JSON.stringify(command)}`, () => {
+      assert.ok(checkCommand(command, COMMANDS))
+    })
+  }
+
+  for (
+    const command of ['echo a#b', 'echo $#', 'echo ${#x}', '# pa show x', 'ls # pa show x', 'cat <<EOF\n# pa\nEOF']
+  ) {
+    test(`allows ${JSON.stringify(command)}`, () => {
+      assert.equal(checkCommand(command, COMMANDS), undefined)
+    })
+  }
+
+  test('blocks pa after a ## word', () => {
+    assert.ok(checkCommand('echo a#b; pa show x', COMMANDS))
+  })
+
+  test('a comment holding << is not an unterminated heredoc', () => {
+    assert.equal(checkCommand('# cat <<EOF\nls', COMMANDS), undefined)
+  })
+})
+
 describe('checkCommand heredocs', () => {
   const HEREDOC_COMMANDS = ['env', 'pam']
   const body = '`env` and $(pam s x)\n'

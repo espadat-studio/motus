@@ -162,7 +162,9 @@ function splitCommands(source: string, bodies: string[]): string[][] {
       }
       heredocs = []
       index = end
-    } else if (char === '\\') {
+    } else if (char === '#' && word === undefined)
+      index = findClosing(source, '\n', index) - 1
+    else if (char === '\\') {
       word = (word ?? '') + (source[index + 1] ?? '')
       index++
     } else if (char === "'") {
@@ -210,6 +212,7 @@ function findClosingParen(source: string, from: number): number {
   for (let index = from; index < source.length; index++) {
     const char = source[index]
     if (char === '\\') index++
+    else if (char === '#' && isWordStart(source, index)) index = findClosing(source, '\n', index) - 1
     else if (char === "'" || char === '"') index = findClosing(source, char, index + 1)
     else if (source.startsWith('<<<', index)) index += 2
     else if (source.startsWith('<<', index)) {
@@ -223,6 +226,10 @@ function findClosingParen(source: string, from: number): number {
     else if (char === ')' && --depth === 0) return index
   }
   return source.length
+}
+
+function isWordStart(source: string, index: number): boolean {
+  return index === 0 || ' \t\n;&|(<>'.includes(source[index - 1] ?? '')
 }
 
 function readHeredoc(source: string, from: number): [Heredoc, number] {
