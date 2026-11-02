@@ -1,4 +1,8 @@
+import { setTimeout as delay } from 'node:timers/promises'
+
 import { type Config, type ConfiguredSource, defaultEnvSource, readConfig } from './config.ts'
+
+const ABORT_GRACE_MS = 1000
 
 export interface Secret {
   name: string
@@ -83,19 +87,42 @@ async function loadOne(
   const warn = (message: string): void => {
     warnings.push(`${source.id} warning: ${message}`)
   }
+  const settled = source.load({ cwd, signal, warn }).then(
+    (secrets): Settled => ({ secrets }),
+    (error: unknown): Settled => ({ error }),
+  )
+  const aborted = rejectOnAbort(signal).catch(() => undefined)
+  const outcome = (await Promise.race([settled, aborted])) ?? (await settleWithin(settled, ABORT_GRACE_MS))
+  if (outcome && 'secrets' in outcome) return { id: source.id, secrets: outcome.secrets, warnings }
+  const error = outcome?.error
+  const timeout = `timed out after ${timeoutMs} ms`
+  if (error instanceof PartialLoadError) {
+    const reason = signal.aborted ? `${timeout}: ${error.message}` : error.message
+    return {
+      id: source.id,
+      secrets: error.secrets,
+      failure: { id: source.id, required, applies: true, reason },
+      warnings,
+    }
+  }
+  const reason = signal.aborted ? timeout : reasonOf(error)
+  const applies = await Promise
+    .race([source.appliesTo({ cwd }), rejectOnAbort(AbortSignal.timeout(timeoutMs))])
+    .catch(() => true)
+  return { id: source.id, failure: { id: source.id, required, applies, reason }, warnings }
+}
+
+async function settleWithin<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
+  const timer = new AbortController()
+  const expired = delay(ms, undefined, { signal: timer.signal, ref: false }).catch(() => undefined)
   try {
-    const secrets = await Promise.race([source.load({ cwd, signal, warn }), rejectOnAbort(signal)])
-    return { id: source.id, secrets, warnings }
-  } catch (error) {
-    const reason = signal.aborted ? `timed out after ${timeoutMs} ms` : reasonOf(error)
-    const applies = await Promise
-      .race([source.appliesTo({ cwd }), rejectOnAbort(AbortSignal.timeout(timeoutMs))])
-      .catch(() => true)
-    const failure = { id: source.id, required, applies, reason }
-    if (error instanceof PartialLoadError) return { id: source.id, secrets: error.secrets, failure, warnings }
-    return { id: source.id, failure, warnings }
+    return await Promise.race([promise, expired])
+  } finally {
+    timer.abort()
   }
 }
+
+type Settled = { secrets: Secret[] } | { error: unknown }
 
 function rejectOnAbort(signal: AbortSignal): Promise<never> {
   return new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }))

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
@@ -10,6 +10,7 @@ import { parseConfig } from '../src/config.ts'
 import { describeLoad, loadFromConfig, loadSources, PartialLoadError, type SecretSource } from '../src/sources.ts'
 import { commandSource } from '../src/sources/command.ts'
 import { envSource } from '../src/sources/env.ts'
+import { miseSource } from '../src/sources/mise.ts'
 import { paSource } from '../src/sources/pa.ts'
 
 const ctx = { cwd: tmpdir(), signal: new AbortController().signal, warn: () => {} }
@@ -308,6 +309,42 @@ describe('loadSources', () => {
     assert.deepEqual(result.failures, [{ id: 'hang', required: true, applies: true, reason: 'timed out after 20 ms' }])
   })
 
+  test('fails as timed out when an aborted source rejects without a partial result', async () => {
+    const source = fakeSource(
+      'plain',
+      ({ signal }) => new Promise((_, reject) => signal.addEventListener('abort', () => reject(new Error('killed')))),
+    )
+    const result = await loadSources([{ source, required: true, timeoutMs: 20 }], tmpdir())
+    assert.deepEqual(result.secrets, [])
+    assert.deepEqual(result.failures, [{ id: 'plain', required: true, applies: true, reason: 'timed out after 20 ms' }])
+  })
+
+  test('keeps the secrets a source returns after the abort', async () => {
+    const source = fakeSource(
+      'late',
+      ({ signal }) => new Promise((resolve) => signal.addEventListener('abort', () => resolve([secret]))),
+    )
+    const result = await loadSources([{ source, required: true, timeoutMs: 20 }], tmpdir())
+    assert.deepEqual(result.secrets, [secret])
+    assert.deepEqual(result.failures, [])
+  })
+
+  test('keeps the partial secrets and names the cause when a source throws PartialLoadError after the abort', async () => {
+    const source = fakeSource(
+      'part',
+      ({ signal }) =>
+        new Promise((_, reject) =>
+          signal.addEventListener('abort', () => reject(new PartialLoadError('a.toml failed: killed', [secret])))
+        ),
+      false,
+    )
+    const result = await loadSources([{ source, required: true, timeoutMs: 20 }], tmpdir())
+    assert.deepEqual(result.secrets, [secret])
+    assert.deepEqual(result.failures, [
+      { id: 'part', required: true, applies: true, reason: 'timed out after 20 ms: a.toml failed: killed' },
+    ])
+  })
+
   test('treats a hanging appliesTo as applying', async () => {
     const source: SecretSource = {
       id: 'stuck',
@@ -332,6 +369,64 @@ describe('loadSources', () => {
     }
     const result = await loadSources([{ source, required: true, timeoutMs: 1000 }], tmpdir())
     assert.equal(result.failures[0]?.applies, true)
+  })
+})
+
+describe('loadSources timeout with a real miseSource', () => {
+  const STUB = `#!/bin/sh
+[ -e "$4/hang" ] && exec sleep 30
+exec cat "$4/mise-stub.json"
+`
+  const FAST = 'fixture-fast-token-0001'
+
+  async function timedOut(cwd: string) {
+    const home = await realpath(await mkdtemp(join(tmpdir(), 'motus-timeout-')))
+    const files: Record<string, string> = {
+      'bin/mise': STUB,
+      list: '~/fast/mise.toml\n~/slow/mise.toml\n',
+      'fast/mise.toml': '[env]\nFAST_TOKEN = { age = "fixture-ciphertext" }\n',
+      'fast/mise-stub.json': `{"FAST_TOKEN":"${FAST}"}`,
+      'slow/mise.toml': '[env]\nSLOW_TOKEN = { age = "fixture-ciphertext" }\n',
+      'slow/hang': '',
+      'fast/src/.keep': '',
+      'slow/src/.keep': '',
+      'neither/.keep': '',
+    }
+    for (const [path, content] of Object.entries(files)) {
+      await mkdir(dirname(join(home, path)), { recursive: true })
+      await writeFile(join(home, path), content)
+    }
+    await chmod(join(home, 'bin/mise'), 0o755)
+    const env = { HOME: home, PATH: `${join(home, 'bin')}:/usr/bin:/bin` }
+    const source = miseSource('mise', '~/list', env)
+    const result = await loadSources([{ source, required: true, timeoutMs: 500 }], join(home, cwd))
+    return { home, result }
+  }
+
+  test('keeps the fast value and only warns when the cwd is in neither project', async () => {
+    const { home, result } = await timedOut('neither')
+    assert.deepEqual(result.secrets.map(({ value }) => value), [FAST])
+    assert.deepEqual(result.failures, [])
+    assert.equal(result.warnings.length, 1)
+    assert.match(result.warnings[0] as string, new RegExp(`${home}/slow/mise.toml failed`))
+  })
+
+  test('keeps the fast value and degrades naming the slow file when the cwd covers it', async () => {
+    const { home, result } = await timedOut('slow/src')
+    assert.deepEqual(result.secrets.map(({ value }) => value), [FAST])
+    assert.equal(result.failures.length, 1)
+    assert.equal(result.failures[0]?.applies, true)
+    assert.match(
+      result.failures[0]?.reason as string,
+      new RegExp(`^timed out after 500 ms: ${home}/slow/mise.toml failed`),
+    )
+  })
+
+  test('does not degrade when the cwd covers only the fast file', async () => {
+    const { result } = await timedOut('fast/src')
+    assert.deepEqual(result.secrets.map(({ value }) => value), [FAST])
+    assert.deepEqual(result.failures, [])
+    assert.equal(result.warnings.length, 1)
   })
 })
 
