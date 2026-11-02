@@ -32,6 +32,11 @@ interface SimpleCommand {
   targets: string[]
 }
 
+interface Redirect {
+  length: number
+  isDuplication: boolean
+}
+
 class ParseError extends Error {}
 
 export function checkCommand(command: string, blockCommands: readonly string[]): string | undefined {
@@ -216,11 +221,6 @@ function splitCommands(source: string, bodies: string[]): SimpleCommand[] {
   }
   endCommand()
   return commands
-}
-
-interface Redirect {
-  length: number
-  isDuplication: boolean
 }
 
 function readRedirect(source: string, index: number): Redirect | undefined {

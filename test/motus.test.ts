@@ -132,6 +132,13 @@ describe('tool_call', () => {
     assert.ok(await emit('tool_call', { toolName: 'bash', input: { command: 'true && \\\npa show x' } }))
   })
 
+  test('blocks commands behind redirections', async () => {
+    const { emit } = await setup({ blockCommands: ['env', 'cat .env*'] })
+    for (const command of ['env 2>&1 | grep KEY', 'nohup env 2>&1', 'cat <.env'])
+      assert.ok(await emit('tool_call', { toolName: 'bash', input: { command } }), command)
+    assert.equal(await emit('tool_call', { toolName: 'bash', input: { command: 'env FOO=1 ls 2>&1' } }), undefined)
+  })
+
   test('blocks commands and path spellings in bash', async () => {
     const { emit } = await setup(config)
     assert.ok(await emit('tool_call', { toolName: 'bash', input: { command: 'echo $(pa show x)' } }))

@@ -139,6 +139,7 @@ describe('checkCommand comments', () => {
 describe('checkCommand redirections', () => {
   const blocked = [
     'env 2>&1 | grep KEY',
+    'printenv 2>&1',
     'env 2>/dev/null | grep KEY',
     'env >&2',
     'nohup env 2>&1',
@@ -164,7 +165,7 @@ describe('checkCommand redirections', () => {
   ]
   for (const command of blocked) {
     test(`blocks ${command}`, () => {
-      assert.ok(checkCommand(command, [...COMMANDS, 'env']))
+      assert.ok(checkCommand(command, [...COMMANDS, 'env', 'printenv']))
     })
   }
 
@@ -181,7 +182,7 @@ describe('checkCommand redirections', () => {
     ]
   ) {
     test(`allows ${command}`, () => {
-      assert.equal(checkCommand(command, [...COMMANDS, 'env']), undefined)
+      assert.equal(checkCommand(command, [...COMMANDS, 'env', 'printenv']), undefined)
     })
   }
 
