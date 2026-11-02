@@ -16,6 +16,8 @@ import { describeLoad, loadFromConfig } from '../src/sources.ts'
 
 const REDACTION_FAILED = '[motus: redaction failed, output withheld]'
 const COMMAND_FAILED = '[motus: command failed or its output could not be redacted, output withheld]'
+const HELD_VALUE_REFUSAL =
+  'motus: refused: the command holds a loaded secret value. Reference it by variable name, e.g. $API_TOKEN'
 const PLACEHOLDER_TOOLS = new Set(['write', 'edit', 'bash'])
 const MAX_PATH_LENGTH = 4096
 
@@ -107,6 +109,7 @@ export function createMotus(
     })
 
     pi.on('user_bash', async (event, ctx) => {
+      if (state.matcher.redact(event.command) !== event.command) throw new Error(HELD_VALUE_REFUSAL)
       const reason = state.degraded ? `session is degraded (${state.degraded})` : checkShellCommand(event.command)
       if (reason) return { result: bashResult(`motus: blocked: ${reason}`, 1) }
       try {

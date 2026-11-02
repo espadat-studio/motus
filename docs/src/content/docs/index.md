@@ -9,7 +9,7 @@ Agents print secrets all the time. `env`, `cat .env`, [`forge -vvvv`](https://bo
 
 ## What it does
 
-- **Redaction in [pi](https://github.com/earendil-works/pi).** Tool results, saved messages, prompts, `!` shell commands and the provider request all pass through it. Exact values only, plus a few vendor prefixes (`sk-ant-`, `ghp_`, `AKIA`) for keys that were never loaded.
+- **Redaction in [pi](https://github.com/earendil-works/pi).** Tool results, saved messages, prompts, `!` shell commands and the provider request all pass through it. A `!` command that holds a loaded value is refused, because pi saves the command text raw. Use the variable name. Exact values only, plus a few vendor prefixes (`sk-ant-`, `ghp_`, `AKIA`) for keys that were never loaded.
 - **Blocks in [pi](https://github.com/earendil-works/pi) and Claude Code.** Credential files and secret-manager commands ([`pa show`](https://passwordass.org), `gh auth token`, [`op read`](https://developer.1password.com/docs/cli/)) are refused before they run. Claude Code gets a `PreToolUse` hook, because it ignores output rewrites for Bash.
 - **Five sources.** `env`, `command`, [`mise`](https://mise.jdx.dev), [`pa`](https://passwordass.org) and [`1password`](https://1password.com), set up in one TOML file.
 - **No entropy rules.** Tx hashes, addresses and storage slots in web3 repos pass through untouched.

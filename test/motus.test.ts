@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { after, describe, test } from 'node:test'
+import { after, before, describe, test } from 'node:test'
 
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent'
+import { type ExtensionAPI, SessionManager } from '@earendil-works/pi-coding-agent'
 import { stringify } from 'smol-toml'
 
 import { createMotus } from '../extensions/motus.ts'
@@ -159,6 +159,13 @@ describe('tool_call', () => {
 })
 
 describe('redaction', () => {
+  before(() => {
+    process.env['API_TOKEN'] = TOKEN
+  })
+  after(() => {
+    delete process.env['API_TOKEN']
+  })
+
   test('tool_result redacts content, structuredContent and details', async () => {
     const { emit } = await setup()
     const result = await emit('tool_result', {
@@ -232,7 +239,7 @@ describe('redaction', () => {
 
   test('user_bash runs the command and redacts its output', async () => {
     const { emit, home } = await setup()
-    const result = await emit('user_bash', { command: `echo ${TOKEN}`, cwd: home, excludeFromContext: true }) as {
+    const result = await emit('user_bash', { command: 'echo $API_TOKEN', cwd: home, excludeFromContext: true }) as {
       result: { output: string; exitCode: number }
     }
     assert.equal(result.result.output.trim(), '[REDACTED:API_TOKEN]')
@@ -241,7 +248,7 @@ describe('redaction', () => {
 
   test('user_bash truncates long output after redacting it', async () => {
     const { emit, home } = await setup()
-    const command = `seq 5000; echo ${TOKEN}`
+    const command = 'seq 5000; echo $API_TOKEN'
     const result = await emit('user_bash', { command, cwd: home, excludeFromContext: false }) as {
       result: { output: string; truncated: boolean }
     }
@@ -266,6 +273,57 @@ describe('redaction', () => {
       messages: [{ content: '{"k":"[REDACTED:API_TOKEN]"}\n' }],
     })
     assert.deepEqual(await emit('before_provider_request', { payload: cyclic() }), {})
+  })
+})
+
+describe('user_bash with a loaded value', () => {
+  const REFUSED = /Reference it by variable name/
+
+  async function pasteIntoSession(command: string, config: unknown = {}) {
+    const { emit, home } = await setup(config)
+    const dir = join(home, 'sessions')
+    const session = SessionManager.create(home, dir)
+    session.appendMessage({ role: 'user', content: 'hi', timestamp: 0 })
+    let error: unknown
+    try {
+      const result = await emit('user_bash', { command, cwd: home, excludeFromContext: false }) as {
+        result: { output: string; exitCode: number }
+      }
+      session.appendMessage({ role: 'bashExecution', command, timestamp: 0, ...result.result } as never)
+    } catch (caught) {
+      error = caught
+    }
+    const [file] = await readdir(dir)
+    return { home, error, jsonl: await readFile(join(dir, file ?? ''), 'utf8') }
+  }
+
+  test('throws, does not run and leaves no raw value in the session file', async () => {
+    const { error, jsonl, home } = await pasteIntoSession(`touch made; echo ${TOKEN}`)
+    assert.match((error as Error).message, REFUSED)
+    assert.ok(!(error as Error).message.includes(TOKEN))
+    assert.ok(!existsSync(join(home, 'made')))
+    assert.ok(!jsonl.includes(TOKEN))
+    assert.ok(!jsonl.includes('bashExecution'))
+  })
+
+  test('throws for commands motus would block', async () => {
+    const { error, jsonl } = await pasteIntoSession(`touch ${TOKEN}`, { blockCommands: ['touch'] })
+    assert.match((error as Error).message, REFUSED)
+    assert.ok(!jsonl.includes(TOKEN))
+  })
+
+  test('throws in a degraded session', async () => {
+    const { error, jsonl } = await pasteIntoSession(`echo ${TOKEN}`, {
+      sources: [{ type: 'command', command: 'exit 3' }],
+    })
+    assert.match((error as Error).message, REFUSED)
+    assert.ok(!jsonl.includes(TOKEN))
+  })
+
+  test('a command referencing $VAR runs and is recorded', async () => {
+    const { error, jsonl } = await pasteIntoSession('echo $API_TOKEN')
+    assert.equal(error, undefined)
+    assert.ok(jsonl.includes('echo $API_TOKEN'))
   })
 })
 
