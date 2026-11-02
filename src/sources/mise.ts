@@ -339,12 +339,17 @@ function fileEnv(path: string): string | undefined {
 
 function projectRoot(path: string): string {
   const parent = dirname(path)
+  return stripDotConfig(layoutDir(path, parent))
+}
+
+function layoutDir(path: string, parent: string): string {
+  if (CONF_D.test(parent)) return dirname(dirname(parent))
   const isXdgMise = basename(parent) === 'mise' && basename(dirname(parent)) === '.config'
-  const dir = CONF_D.test(parent)
-    ? dirname(dirname(parent))
-    : basename(path).startsWith('config') || isXdgMise
-    ? dirname(parent)
-    : parent
+  if (basename(path).startsWith('config') || isXdgMise) return dirname(parent)
+  return parent
+}
+
+function stripDotConfig(dir: string): string {
   return basename(dir) === '.config' ? dirname(dir) : dir
 }
 

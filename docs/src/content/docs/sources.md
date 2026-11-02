@@ -40,7 +40,7 @@ listFile = "~/.config/rotate-mise-secrets/files"
 
 - `listFile` has one absolute path per line. Blank lines and `#` comments are skipped.
 - If the working directory has [age](https://age-encryption.org) keys that the list doesn't, motus warns about the drift. Unlisted `[env]` keys still load, because stock mise refuses them in an untrusted project.
-- motus finds every project layout mise loads: `mise.toml`, `.config/mise.toml`, `.config/mise/config.toml`, `.config/mise/mise.toml`, `.mise/config.toml`, `mise/config.toml` and the `*.toml` files of `.config/mise/conf.d`, `.mise/conf.d` and `mise/conf.d`. Files in `conf.d` always load, whatever their name.
+- motus finds every project layout mise loads: `mise.toml`, `.mise.toml`, `.config/mise.toml`, `.config/mise/config.toml`, `.config/mise/mise.toml`, `.mise/config.toml`, `mise/config.toml` and the `*.toml` files of `.config/mise/conf.d`, `.mise/conf.d` and `mise/conf.d`. Files in `conf.d` always load, whatever their name.
 - Task keys (`tasks.<name>.env`, `[vars]` and `#MISE` file-task headers) are decrypted only from listed files and task scripts directly under the project root of a listed file. motus renders decrypted values as templates, so it never decrypts task keys from content you did not list. Those keys fail with `not in listFile` and the session degrades until you list the repo or run `/motus continue`.
 - Listing a global config such as `~/.config/mise/config.toml` approves task scripts directly under your home directory, not repos below it.
 - If one file fails, the others still load. The session degrades only when the failed file covers the working directory.
