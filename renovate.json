@@ -2,7 +2,6 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended",
-    "group:all",
     "schedule:weekly",
     "helpers:pinGitHubActionDigests"
   ],
@@ -26,6 +25,15 @@
   ],
   "packageRules": [
     {
+      "description": "Everything that never reaches the release: devDependencies, the docs site and GitHub Actions. One weekly PR typed chore, which the release tool ignores, so merging it cuts no release.",
+      "matchPackageNames": [
+        "*"
+      ],
+      "groupName": "tooling dependencies",
+      "semanticCommitType": "chore",
+      "semanticCommitScope": "deps"
+    },
+    {
       "description": "@types/node tracks engines.node, not the newest LTS. Typechecking against 24's lib accepts APIs absent on the >=22.19.0 floor this package claims. Raise this ceiling in the same commit that raises engines.",
       "matchDepNames": [
         "@types/node"
@@ -40,11 +48,18 @@
       "enabled": false
     },
     {
-      "description": "The docs site under `docs/`. Its `dependencies` would take `fix(deps)` from config:recommended's :semanticPrefixFixDepsChoreOthers, and release-please cuts a patch release from a `fix` - so a Starlight or theme bump would publish an npm version whose `files` list does not even contain `docs/`. Docs dependencies never reach the package.",
-      "matchFileNames": [
-        "docs/**"
+      "description": "Root npm dependencies ship in the published package, so a bump only reaches users through a release: release-please cuts one for fix. Own weekly PR, so a tooling bump never rides along. devDependencies, the docs site and GitHub Actions stay chore.",
+      "matchManagers": [
+        "npm"
       ],
-      "semanticCommitType": "chore",
+      "matchDepTypes": [
+        "dependencies"
+      ],
+      "matchFileNames": [
+        "package.json"
+      ],
+      "groupName": "runtime dependencies",
+      "semanticCommitType": "fix",
       "semanticCommitScope": "deps"
     }
   ]
