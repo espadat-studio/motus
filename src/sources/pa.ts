@@ -13,9 +13,10 @@ export function paSource(id: string, { dir, entries, minValueLength, env }: PaOp
   return {
     id,
     appliesTo: async () => true,
-    load: async ({ cwd, signal }) => {
+    load: async ({ cwd, signal, progress }) => {
       const options = { cwd, signal, env: { ...env, PA_DIR: dir } }
       const names = entries ?? (await listEntries(dir, options))
+      if (!entries) progress()
       const secrets: Secret[] = []
       const failures: string[] = []
       for (const name of names) {
@@ -23,10 +24,12 @@ export function paSource(id: string, { dir, entries, minValueLength, env }: PaOp
         try {
           output = await runPa(['show', name], options, `pa show "${name}"`)
         } catch (error) {
-          if (signal.aborted) throw error
           failures.push((error as Error).message)
+          if (signal.aborted) throw new PartialLoadError(failures.join('; '), secrets)
+          progress()
           continue
         }
+        progress()
         const lines = output
           .split(/\r?\n/)
           .filter((line) => line.trim() !== '' && line.length >= minValueLength)

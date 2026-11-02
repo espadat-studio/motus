@@ -33,7 +33,7 @@ async function fixture(script = stub(FIXTURES)): Promise<{ home: string; env: No
 }
 
 function load(source: ReturnType<typeof onePasswordSource>, signal = new AbortController().signal) {
-  return source.load({ cwd: tmpdir(), signal, warn: () => {} })
+  return source.load({ cwd: tmpdir(), signal, warn: () => {}, progress: () => {} })
 }
 
 async function calls(home: string): Promise<string[]> {

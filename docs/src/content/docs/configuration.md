@@ -67,7 +67,7 @@ Every source also takes these:
 | `type`      | required   | `env`, `command`, [`mise`](https://mise.jdx.dev), [`pa`](https://passwordass.org) or [`1password`](https://1password.com) |
 | `id`        | the `type` | Name shown in reports. Must be unique                                                                                     |
 | `required`  | `true`     | A required source that fails where it applies degrades the session                                                        |
-| `timeoutMs` | `10000`    | Load deadline for this source                                                                                             |
+| `timeoutMs` | `10000`    | Longest time without progress. `pa` reports after each entry, `mise` after each file; other sources bound the whole load  |
 
 ## Degraded sessions
 

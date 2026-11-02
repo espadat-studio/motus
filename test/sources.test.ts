@@ -13,7 +13,8 @@ import { envSource } from '../src/sources/env.ts'
 import { miseSource } from '../src/sources/mise.ts'
 import { paSource } from '../src/sources/pa.ts'
 
-const ctx = { cwd: tmpdir(), signal: new AbortController().signal, warn: () => {} }
+const ctx = { cwd: tmpdir(), signal: new AbortController().signal, warn: () => {}, progress: () => {} }
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 function fakeSource(id: string, load: SecretSource['load'], applies = true): SecretSource {
   return { id, appliesTo: async () => applies, load }
@@ -215,6 +216,30 @@ describe('paSource', () => {
     })
   })
 
+  test('reports progress after pa list and after each entry, failed ones included', async () => {
+    const { dir, env } = await fakePaStore({ alpha: 'fixture-pass-0001', omega: 'fixture-pass-0002' })
+    let steps = 0
+    await paSource('pa', { dir, env, minValueLength: 8 }).load({ ...ctx, progress: () => steps++ })
+    assert.equal(steps, 3)
+    steps = 0
+    await assert.rejects(
+      paSource('pa', { dir, env, minValueLength: 8, entries: ['alpha', 'stale'] }).load({
+        ...ctx,
+        progress: () => steps++,
+      }),
+    )
+    assert.equal(steps, 2)
+  })
+
+  test('a timed-out entry keeps the entries loaded before it', async () => {
+    const { dir, env } = await fakePaStore({ alpha: 'fixture-pass-0001' })
+    const source = paSource('pa', { dir, env, minValueLength: 8, entries: ['alpha', 'slow'] })
+    const result = await loadSources([{ source, required: true, timeoutMs: 300 }], tmpdir())
+    assert.deepEqual(result.secrets.map(({ name }) => name), ['alpha'])
+    assert.equal(result.failures.length, 1)
+    assert.match(result.failures[0]?.reason as string, /^timed out after 300 ms: pa show "slow"/)
+  })
+
   test('aborting kills the in-flight pa process', async () => {
     const { dir, env } = await fakePaStore({})
     const controller = new AbortController()
@@ -325,6 +350,57 @@ describe('loadSources', () => {
     const hang = fakeSource('hang', () => new Promise(() => {}))
     const result = await loadSources([{ source: hang, required: true, timeoutMs: 20 }], tmpdir())
     assert.deepEqual(result.failures, [{ id: 'hang', required: true, applies: true, reason: 'timed out after 20 ms' }])
+  })
+
+  test('loads a source past timeoutMs while it keeps reporting progress', async () => {
+    const stepped = fakeSource('stepped', async ({ signal, progress }) => {
+      const secrets = []
+      for (let step = 1; step <= 5; step++) {
+        await sleep(15)
+        signal.throwIfAborted()
+        secrets.push({ ...secret, name: `STEP_${step}` })
+        progress()
+      }
+      return secrets
+    })
+    const result = await loadSources([{ source: stepped, required: true, timeoutMs: 20 }], tmpdir())
+    assert.deepEqual(result.failures, [])
+    assert.equal(result.secrets.length, 5)
+  })
+
+  test('times out a hung step and keeps the secrets of the steps before it', async () => {
+    const stepped = fakeSource('stepped', async ({ signal, progress }) => {
+      const secrets = []
+      for (let step = 1; step <= 2; step++) {
+        await sleep(15)
+        secrets.push({ ...secret, name: `STEP_${step}` })
+        progress()
+      }
+      await new Promise((resolve) => signal.addEventListener('abort', resolve))
+      throw new PartialLoadError('step 3 killed', secrets)
+    })
+    const result = await loadSources([{ source: stepped, required: true, timeoutMs: 20 }], tmpdir())
+    assert.deepEqual(result.secrets.map(({ name }) => name), ['STEP_1', 'STEP_2'])
+    assert.deepEqual(result.failures, [
+      { id: 'stepped', required: true, applies: true, reason: 'timed out after 20 ms: step 3 killed' },
+    ])
+  })
+
+  test('times out a one-step source that takes longer than timeoutMs', async () => {
+    const slow = fakeSource(
+      'slow',
+      ({ signal }) =>
+        new Promise((resolve, reject) => {
+          const timer = setTimeout(() => resolve([secret]), 75)
+          signal.addEventListener('abort', () => {
+            clearTimeout(timer)
+            reject(new Error('killed'))
+          })
+        }),
+    )
+    const result = await loadSources([{ source: slow, required: true, timeoutMs: 20 }], tmpdir())
+    assert.deepEqual(result.secrets, [])
+    assert.deepEqual(result.failures, [{ id: 'slow', required: true, applies: true, reason: 'timed out after 20 ms' }])
   })
 
   test('fails as timed out when an aborted source rejects without a partial result', async () => {

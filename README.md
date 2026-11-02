@@ -112,7 +112,7 @@ blockCommands = ["env", "printenv", "mise env", "cat .env*"]
 | `minValueLength`           | `8`                                                  | Shorter values are ignored, with a warning that names the key                                                        |
 | `claudeCode.blockCommands` | `[]`                                                 | Extra blocks for the Claude Code hook only, since it can't redact                                                    |
 
-Unknown keys are errors. Every source also takes `id` (defaults to its `type`), `required` (default `true`) and `timeoutMs` (default `10000`). The config never holds secret values.
+Unknown keys are errors. Every source also takes `id` (defaults to its `type`), `required` (default `true`) and `timeoutMs` (default `10000`), the longest the source may go without progress. The config never holds secret values.
 
 ### Sources
 
@@ -159,7 +159,7 @@ entries = ["web/github", "mail"]
 - Exactly one of `entries` or `whole = true`. `whole` loads every entry except `*/meta`.
 - `dir` defaults to `${PA_DIR:-~/.local/share/pa}`.
 - Kept lines: non-blank, at least `minValueLength` chars. One kept line gives `web/github`. Several give `web/github:1`, `web/github:2`. An entry with none loads nothing.
-- Entries decrypt one by one within the source's `timeoutMs` (default 10 s). Raise it for long `entries` lists or a large `whole` store.
+- Entries decrypt one by one. `timeoutMs` (default 10 s) bounds each entry, not the whole store, so a large `whole` store or parallel sub-agents sharing one TPM still load. Raise it only when a single entry is slow, such as a YubiKey PIN prompt.
 
 A store created by [pa](https://passwordass.org) without a plugin uses a plain [age](https://age-encryption.org) key, so it decrypts with no prompt. Use `whole` for it, or for a TPM-keyed store (`age-plugin-tpm`). A YubiKey-keyed store asks for a PIN and a touch on every startup. The PIN needs a GUI pinentry, because [pi](https://github.com/earendil-works/pi) owns the terminal. Without one, the source times out and the session degrades. Prefer a short `entries` list there.
 

@@ -28,11 +28,12 @@ async function fixture(files: Record<string, string>): Promise<{ home: string; e
   return { home, env: { HOME: home, PATH: `${join(home, 'bin')}:/usr/bin:/bin` } }
 }
 
-function load(home: string, env: NodeJS.ProcessEnv, cwd: string, warnings: string[] = []) {
+function load(home: string, env: NodeJS.ProcessEnv, cwd: string, warnings: string[] = [], progress = () => {}) {
   return miseSource('mise', '~/list', env).load({
     cwd: join(home, cwd),
     signal: new AbortController().signal,
     warn: (message) => warnings.push(message),
+    progress,
   })
 }
 
@@ -64,6 +65,15 @@ describe('miseSource', () => {
     ])
     assert.ok(secrets.every(({ source }) => source === 'mise'))
     assert.deepEqual(warnings, [])
+  })
+
+  test('reports progress once per file', async () => {
+    const { home, env } = await fixture({ ...listed, list: `${listed.list}~/gone/mise.toml\n` })
+    const warnings: string[] = []
+    let steps = 0
+    await load(home, env, 'plain', warnings, () => steps++)
+    assert.equal(warnings.length, 1)
+    assert.equal(steps, 4)
   })
 
   test('ignores an inherited MISE_ENV for base files', async () => {
