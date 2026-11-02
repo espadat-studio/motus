@@ -137,10 +137,10 @@ export function parseConfig(raw: unknown, env: NodeJS.ProcessEnv = process.env):
     sources: parseSources(config['sources'] ?? [], env, minValueLength),
     prefixes: asPrefixes(config['prefixes'] ?? DEFAULT_PREFIXES),
     blockPaths: asStrings(config['blockPaths'] ?? [], 'blockPaths'),
-    blockCommands: asStrings(config['blockCommands'] ?? [], 'blockCommands'),
+    blockCommands: asBlockCommands(config['blockCommands'] ?? [], 'blockCommands'),
     degradedAllowTools: asStrings(config['degradedAllowTools'] ?? [], 'degradedAllowTools'),
     minValueLength,
-    claudeCode: { blockCommands: asStrings(claudeCode['blockCommands'] ?? [], 'claudeCode.blockCommands') },
+    claudeCode: { blockCommands: asBlockCommands(claudeCode['blockCommands'] ?? [], 'claudeCode.blockCommands') },
   }
 }
 
@@ -183,6 +183,16 @@ function asStrings(raw: unknown, at: string): string[] {
   if (!Array.isArray(raw) || !raw.every((item) => typeof item === 'string'))
     throw new Error(`${at} must be an array of strings`)
   return raw
+}
+
+function asBlockCommands(raw: unknown, at: string): string[] {
+  const entries = asStrings(raw, at)
+  for (const entry of entries) {
+    const head = entry.trim().split(/\s+/)[0] ?? ''
+    if (head === '') throw new Error(`${at} entry "${entry}" is empty`)
+    if (head.includes('/')) throw new Error(`${at} entry "${entry}": the command name must not contain "/"`)
+  }
+  return entries
 }
 
 function asPrefixes(raw: unknown): string[] {
