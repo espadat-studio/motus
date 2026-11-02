@@ -432,16 +432,34 @@ describe('paths', () => {
 
 describe('checkPlaceholders', () => {
   const loaded = new Set(['ALCHEMY_KEY'])
+  const prefixes = ['sk-ant-', 'ghp_', 'github_pat_', 'AKIA', 'xox[bp]-']
 
   test('blocks a loaded name', () => {
-    assert.match(checkPlaceholders('RPC=https://x/[REDACTED:ALCHEMY_KEY]', loaded) ?? '', /ALCHEMY_KEY/)
+    assert.match(checkPlaceholders('RPC=https://x/[REDACTED:ALCHEMY_KEY]', loaded, prefixes) ?? '', /ALCHEMY_KEY/)
   })
 
-  test('allows an unloaded name', () => {
-    assert.equal(checkPlaceholders('see [REDACTED:OTHER]', loaded), undefined)
+  test('blocks loaded names with a space, bracket or quote in JSON-escaped input', () => {
+    for (const name of ['MY KEY', 'A]B', 'Q"UOTE', 'back\\slash']) {
+      const input = JSON.stringify({ content: `x [REDACTED:${name}]` })
+      assert.ok(checkPlaceholders(input, new Set([name]), prefixes), name)
+    }
+  })
+
+  test('blocks a placeholder that is a bare prefix', () => {
+    for (const name of ['ghp_', 'xoxb-', 'AKIA', 'xoxp-', 'sk-ant-'])
+      assert.match(checkPlaceholders(`[REDACTED:${name}]`, loaded, prefixes) ?? '', /prefix/, name)
+  })
+
+  test('allows an unrelated name', () => {
+    assert.equal(checkPlaceholders('see [REDACTED:OTHER]', loaded, prefixes), undefined)
+    assert.equal(checkPlaceholders('see [REDACTED:ghp_x]', loaded, prefixes), undefined)
   })
 
   test('allows plain input', () => {
-    assert.equal(checkPlaceholders('ALCHEMY_KEY=$ALCHEMY_KEY', loaded), undefined)
+    assert.equal(checkPlaceholders('ALCHEMY_KEY=$ALCHEMY_KEY', loaded, prefixes), undefined)
+  })
+
+  test('allows everything with no names or prefixes', () => {
+    assert.equal(checkPlaceholders('[REDACTED:ghp_]', new Set(), []), undefined)
   })
 })

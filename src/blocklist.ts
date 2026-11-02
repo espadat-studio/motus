@@ -115,10 +115,21 @@ export function checkBashPaths(command: string, blockPaths: readonly string[], h
   return entry === undefined ? undefined : `command mentions blockPaths entry "${entry}"`
 }
 
-export function checkPlaceholders(input: string, loadedNames: ReadonlySet<string>): string | undefined {
-  for (const [placeholder, name] of input.matchAll(PLACEHOLDER)) {
-    if (name !== undefined && loadedNames.has(name))
+export function checkPlaceholders(
+  input: string,
+  loadedNames: ReadonlySet<string>,
+  prefixes: readonly string[],
+): string | undefined {
+  for (const name of loadedNames) {
+    const placeholder = `[REDACTED:${name}]`
+    if (input.includes(JSON.stringify(placeholder).slice(1, -1)))
       return `${placeholder} stands in for a loaded secret; writing it would replace the real value`
+  }
+  if (prefixes.length === 0) return undefined
+  const prefixName = new RegExp(`^(?:${prefixes.join('|')})$`)
+  for (const [placeholder, name] of input.matchAll(PLACEHOLDER)) {
+    if (name !== undefined && prefixName.test(name))
+      return `${placeholder} stands in for a token matching a configured prefix; writing it would replace the real value`
   }
   return undefined
 }

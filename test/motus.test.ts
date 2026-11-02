@@ -240,6 +240,22 @@ describe('tool_call', () => {
     assert.equal(await emit('tool_call', write), undefined)
   })
 
+  test('blocks prefix and loaded-name placeholders in write, edit and bash', async () => {
+    const { emit } = await setup(config)
+    for (const name of ['ghp_', 'xoxb-', 'API_TOKEN']) {
+      const text = `x [REDACTED:${name}]`
+      for (
+        const call of [
+          { toolName: 'write', input: { path: 'a.md', content: text } },
+          { toolName: 'edit', input: { path: 'a.md', edits: [{ oldText: 'x', newText: text }] } },
+          { toolName: 'bash', input: { command: `echo '${text}' > a.md` } },
+        ]
+      ) { assert.ok(await emit('tool_call', call), `${call.toolName} ${name}`) }
+    }
+    const other = { toolName: 'write', input: { path: 'a.md', content: '[REDACTED:OTHER]' } }
+    assert.equal(await emit('tool_call', other), undefined)
+  })
+
   test('blocks commands after a line continuation', async () => {
     const { emit } = await setup(config)
     assert.ok(await emit('tool_call', { toolName: 'bash', input: { command: 'true && \\\npa show x' } }))

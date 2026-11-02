@@ -73,7 +73,11 @@ export function createMotus(
       if (state.degraded && !allowed.includes(event.toolName))
         return `session is degraded (${state.degraded}); every tool except [${allowed.join(', ')}] is blocked`
       if (PLACEHOLDER_TOOLS.has(event.toolName)) {
-        const reason = checkPlaceholders(JSON.stringify(event.input), state.loadedNames)
+        const reason = checkPlaceholders(
+          JSON.stringify(event.input),
+          state.loadedNames,
+          state.config?.prefixes ?? DEFAULT_PREFIXES,
+        )
         if (reason) return reason
       }
       if (isToolCallEventType('bash', event)) return checkShellCommand(event.input.command)
