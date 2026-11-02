@@ -226,7 +226,10 @@ async function loadState(configPath: string, cwd: string, env: NodeJS.ProcessEnv
     prefixes: config?.prefixes ?? DEFAULT_PREFIXES,
     minValueLength: config?.minValueLength ?? DEFAULT_MIN_VALUE_LENGTH,
   })
-  const failed = result.failures.filter(({ required, applies }) => required && applies).map(({ id }) => id)
+  const failed = result
+    .failures
+    .filter(({ required, applies }) => required && applies)
+    .map(({ id, reason }) => `${id} (${reason})`)
   return {
     config,
     matcher,
