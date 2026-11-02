@@ -18,7 +18,7 @@ type Handler = (event: Record<string, unknown>, ctx: unknown) => unknown
 const homes: string[] = []
 after(() => Promise.all(homes.map((home) => rm(home, { recursive: true, force: true }))))
 
-async function setup(config: unknown = {}, extraEnv: Record<string, string> = {}) {
+async function setup(config: unknown = {}, extraEnv: Record<string, string> = {}, deferStart = false) {
   const home = await mkdtemp(join(tmpdir(), 'motus-'))
   homes.push(home)
   await mkdir(join(home, 'vault'))
@@ -45,8 +45,9 @@ async function setup(config: unknown = {}, extraEnv: Record<string, string> = {}
     return handler({ type: name, ...event }, ctx)
   }
   const motus = (args: string) => command(args as never, ctx)
-  await emit('session_start', { reason: 'startup' })
-  return { home, emit, motus, notes }
+  const started = emit('session_start', { reason: 'startup' })
+  if (!deferStart) await started
+  return { home, emit, motus, notes, started }
 }
 
 function cyclic(): Record<string, unknown> {
@@ -123,6 +124,27 @@ describe('degraded state', () => {
     assert.equal(notes.at(-1)?.type, 'warning')
     assert.equal(await emit('tool_call', { toolName: 'grep', input: {} }), undefined)
     assert.ok(await emit('tool_call', { toolName: 'bash', input: { command: 'pa show x' } }))
+  })
+})
+
+describe('prompts during a slow load', () => {
+  const slow = { sources: [{ type: 'command', command: 'sleep 0.3; exit 3', required: false }] }
+  const message = { role: 'user', content: [{ type: 'text', text: `use ${TOKEN}` }] }
+
+  test('input, message_end and before_provider_request wait and redact', async () => {
+    const { emit, started } = await setup(slow, {}, true)
+    const input = emit('input', { text: `use ${TOKEN}`, source: 'rpc' })
+    const ended = emit('message_end', { message })
+    const request = emit('before_provider_request', { payload: { text: TOKEN } })
+    await started
+    for (const result of await Promise.all([input, ended, request])) assert.ok(!JSON.stringify(result).includes(TOKEN))
+  })
+
+  test('an invalid config releases waiting prompts through the failure-path matcher', async () => {
+    const { emit, started } = await setup({ prefixes: ['xox['] }, {}, true)
+    const input = emit('input', { text: `use ${TOKEN}`, source: 'rpc' })
+    await started
+    assert.ok(!JSON.stringify(await input).includes(TOKEN))
   })
 })
 
