@@ -387,8 +387,56 @@ describe('redaction', () => {
       isError: boolean
     }
     assert.ok(!JSON.stringify(result.content).includes(TOKEN))
-    assert.equal(result.details, null)
+    assert.deepEqual(result.details, {})
     assert.equal(result.isError, true)
+  })
+
+  test('deep details that fail redaction never reach the persisted session', async () => {
+    const { emit, home } = await setup()
+    const dir = join(home, 'sessions')
+    const session = SessionManager.create(home, dir)
+    const deep = (): Record<string, unknown> => {
+      let node: Record<string, unknown> = { secret: TOKEN }
+      for (let depth = 0; depth < 5000; depth++) node = { node }
+      return node
+    }
+    const toolResult = {
+      role: 'toolResult',
+      toolCallId: 'call-1',
+      toolName: 'read',
+      content: [{ type: 'text', text: TOKEN }],
+      details: deep(),
+      structuredContent: deep(),
+      errorMessage: TOKEN,
+      isError: false,
+      timestamp: 0,
+    }
+    const failed = await emit('tool_result', { content: toolResult.content, details: toolResult.details }) as {
+      content: unknown
+      details: unknown
+    }
+    assert.deepEqual(failed.details, {})
+    const toolEnd = await emit('message_end', { message: toolResult }) as { message: Record<string, unknown> }
+    for (const field of ['details', 'structuredContent', 'errorMessage']) assert.ok(!(field in toolEnd.message))
+    const customEnd = await emit('message_end', {
+      message: { role: 'custom', customType: 'x', content: TOKEN, display: true, details: deep(), timestamp: 0 },
+    }) as { message: Record<string, unknown> }
+    session.appendMessage({ role: 'user', content: 'hi', timestamp: 0 })
+    session.appendMessage(toolEnd.message as never)
+    session.appendMessage(customEnd.message as never)
+    session.appendMessage({ role: 'user', content: 'again', timestamp: 0 })
+    const [file] = await readdir(dir)
+    const jsonl = await readFile(join(dir, file ?? ''), 'utf8')
+    assert.ok(!jsonl.includes(TOKEN))
+    assert.ok(jsonl.includes('again'))
+    assert.doesNotThrow(() => structuredClone(session.buildSessionContext().messages))
+  })
+
+  test('ordinary tool output is unchanged by redaction', async () => {
+    const { emit } = await setup()
+    const event = { content: [{ type: 'text', text: 'plain' }], details: { path: 'a', lines: [1, 2] } }
+    const result = await emit('tool_result', event) as Record<string, unknown>
+    assert.deepEqual(result, event)
   })
 
   test('message_end redacts every string, tool-call args included', async () => {

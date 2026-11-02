@@ -118,7 +118,7 @@ export function createMotus(
           ...(structuredContent !== undefined && { structuredContent: state.matcher.redact(structuredContent) }),
         }
       } catch {
-        return { content: [{ type: 'text' as const, text: REDACTION_FAILED }], details: null, isError: true }
+        return { content: [{ type: 'text' as const, text: REDACTION_FAILED }], details: {}, isError: true }
       }
     })
 
@@ -127,9 +127,9 @@ export function createMotus(
       try {
         return { message: state.matcher.redact(event.message) }
       } catch {
-        return {
-          message: { ...event.message, content: [{ type: 'text', text: REDACTION_FAILED }] } as typeof event.message,
-        }
+        const { details: _details, structuredContent: _structured, errorMessage: _error, ...rest } = event
+          .message as Record<string, unknown>
+        return { message: { ...rest, content: [{ type: 'text', text: REDACTION_FAILED }] } as typeof event.message }
       }
     })
 
