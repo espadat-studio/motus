@@ -140,7 +140,7 @@ describe('prompts during a slow load', () => {
     for (const result of await Promise.all([input, ended, request])) assert.ok(!JSON.stringify(result).includes(TOKEN))
   })
 
-  test('a load failure releases waiting prompts through the failure-path matcher', async () => {
+  test('an invalid config releases waiting prompts through the failure-path matcher', async () => {
     const { emit, started } = await setup({ prefixes: ['xox['] }, {}, true)
     const input = emit('input', { text: `use ${TOKEN}`, source: 'rpc' })
     await started
