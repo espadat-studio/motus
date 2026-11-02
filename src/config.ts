@@ -5,6 +5,7 @@ import { isAbsolute, join } from 'node:path'
 import { parse } from 'smol-toml'
 
 import { expandPath } from './blocklist.ts'
+import { prefixBranch } from './matcher.ts'
 import type { SecretSource } from './sources.ts'
 import { commandSource } from './sources/command.ts'
 import { envSource } from './sources/env.ts'
@@ -134,7 +135,7 @@ export function parseConfig(raw: unknown, env: NodeJS.ProcessEnv = process.env):
   const minValueLength = asPositiveInteger(config['minValueLength'] ?? DEFAULT_MIN_VALUE_LENGTH, 'minValueLength')
   return {
     sources: parseSources(config['sources'] ?? [], env, minValueLength),
-    prefixes: asStrings(config['prefixes'] ?? DEFAULT_PREFIXES, 'prefixes'),
+    prefixes: asPrefixes(config['prefixes'] ?? DEFAULT_PREFIXES),
     blockPaths: asStrings(config['blockPaths'] ?? [], 'blockPaths'),
     blockCommands: asStrings(config['blockCommands'] ?? [], 'blockCommands'),
     degradedAllowTools: asStrings(config['degradedAllowTools'] ?? [], 'degradedAllowTools'),
@@ -182,6 +183,16 @@ function asStrings(raw: unknown, at: string): string[] {
   if (!Array.isArray(raw) || !raw.every((item) => typeof item === 'string'))
     throw new Error(`${at} must be an array of strings`)
   return raw
+}
+
+function asPrefixes(raw: unknown): string[] {
+  const prefixes = asStrings(raw, 'prefixes')
+  try {
+    new RegExp(prefixBranch(prefixes))
+  } catch {
+    throw new Error('prefixes must compile as a regular expression inside a named group')
+  }
+  return prefixes
 }
 
 function rejectUnknownKeys(object: Options, allowed: readonly string[], at: string): void {
