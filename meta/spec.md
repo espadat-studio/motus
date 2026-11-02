@@ -76,8 +76,9 @@ Verified in pi 1.4.0 source: `tool_result` changes reach the `toolResult` messag
   - lowercase and uppercase hex variants
   - the secret parts of URLs: the password, plus usernames, path segments, query values and `#` parts that are not ordinary URL text (ADR-0003). Alchemy/dRPC RPC URLs carry the key in the path
   - percent-encoded values (`DATABASE_URL` passwords with `@`, `/`, `+`)
+  - JSON-escaped text, and bash double-quoted, single-quoted and `$'...'` spellings, for output of `mise env --json`, `export -p`, `declare -p`, `set`. Full values only, so URL-shaped secrets are covered too
   - fragments: any run of 12 or more characters from a secret, never crossing whitespace (ADR-0002). For a URL, only from its secret parts, each taken alone. Catches `head -c`, `cut -c`, `tail -c`, `fold` and wrapped output
-- JSON escaping is handled by walking strings, not by derived forms.
+- Walking strings covers only parsed structures. JSON text inside one string needs the JSON-escaped derived form.
 - Not covered: base64, reversed values, chunks shorter than 12 characters, ordinary URL text on its own.
 - Vendor prefixes catch keys that were never loaded.
 

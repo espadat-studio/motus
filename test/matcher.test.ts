@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { describe, test } from 'node:test'
 
 import { createMatcher } from '../src/matcher.ts'
@@ -288,6 +289,43 @@ describe('createMatcher', () => {
       const out = redact(text)
       assert.ok(out.endsWith('[REDACTED:SECRET_42]'))
       assert.ok(performance.now() - start < 1000)
+    })
+  })
+
+  describe('escaped spellings', () => {
+    const NASTY = 'fx\'q"b\\s$d`t\nl-end'
+    const URL_VALUE = 'https://user:p"a\\ss@host.example/x'
+
+    for (const value of [NASTY, URL_VALUE]) {
+      test(`redacts JSON text of ${JSON.stringify(value)}`, () => {
+        const { redact } = createMatcher([{ name: 'K', value }], OPTIONS)
+        assert.equal(redact(JSON.stringify({ K: value })), '{"K":"[REDACTED:K]"}')
+      })
+
+      test(`redacts shell output of ${JSON.stringify(value)}`, () => {
+        const { redact } = createMatcher([{ name: 'K', value }], OPTIONS)
+        const script = 'export K="$V"; export -p; declare -p K; declare -x; set'
+        const out = execFileSync('bash', ['-c', script], { env: { V: value, PATH: process.env['PATH'] } }).toString()
+        assert.ok(out.includes('K='))
+        assert.ok(!redact(out).includes(value))
+        for (const line of redact(out).split('\n')) assert.ok(!/p.{0,2}a.{0,3}ss|fx.{0,2}q/.test(line), line)
+      })
+    }
+
+    test("redacts the $'...' spelling bash uses for control characters", () => {
+      const value = "ctl\u0001\ttab\x1bend'q"
+      const { redact } = createMatcher([{ name: 'K', value }], OPTIONS)
+      const out = execFileSync('bash', ['-c', 'export K="$V"; declare -p K; set | grep ^K='], {
+        env: { V: value, PATH: process.env['PATH'] },
+      })
+        .toString()
+      assert.ok(out.includes("$'"))
+      assert.ok(!out.split('\n').some((line) => redact(line).includes('ctl')))
+    })
+
+    test('leaves unrelated text unchanged', () => {
+      const { redact } = createMatcher([{ name: 'K', value: NASTY }], OPTIONS)
+      assert.equal(redact('{"a":"b\\n"} \'x\' "y" $z'), '{"a":"b\\n"} \'x\' "y" $z')
     })
   })
 
