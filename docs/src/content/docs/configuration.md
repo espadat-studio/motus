@@ -25,6 +25,8 @@ blockCommands = ["env", "printenv", "mise env", "cat .env*"]
 
 [pi](https://github.com/earendil-works/pi) ignores the `[claudeCode]` table: it redacts `env` output instead of blocking it. Only the Claude Code hook merges those commands into its blocks.
 
+`blockCommands` entries match each word literally, against the raw word and its basename. There is no tilde or variable expansion. An entry whose command name contains `/` is rejected at load. Use `blockPaths` to protect files.
+
 ## Keys
 
 | Key                        | Default                                              | Read by                                                 | Meaning                                                         |

@@ -380,14 +380,18 @@ function listBodySubstitutions(body: string, bodies: string[]): SimpleCommand[] 
 function matchesEntry(words: readonly string[], entry: string): boolean {
   const [head, ...rest] = entry.trim().split(/\s+/).map(globToRegExp)
   const name = words[0]
-  if (head === undefined || name === undefined || !head.test(basename(name))) return false
+  if (head === undefined || name === undefined || !matchesWord(head, name)) return false
   let index = 1
   for (const pattern of rest) {
-    while (index < words.length && !pattern.test(basename(words[index] ?? ''))) index++
+    while (index < words.length && !matchesWord(pattern, words[index] ?? '')) index++
     if (index === words.length) return false
     index++
   }
   return true
+}
+
+function matchesWord(pattern: RegExp, word: string): boolean {
+  return pattern.test(word) || pattern.test(basename(word))
 }
 
 function globToRegExp(glob: string): RegExp {

@@ -17,6 +17,20 @@ import {
 
 const COMMANDS = ['pa', 'gh auth token', 'mise env', 'cat .env*']
 
+describe('checkCommand slash-bearing words', () => {
+  const matches: [string, string, string][] = [
+    ['cat secrets/prod.env', 'cat secrets/prod.env', 'literal slash entry'],
+    ['kubectl get secret/app', 'kubectl get secret*', 'slash-free glob'],
+    ['/usr/bin/pa show x', 'pa', 'basename head'],
+    ['cat ./.env', 'cat .env*', 'basename arg'],
+  ]
+  for (const [command, entry, name] of matches)
+    test(`blocks ${name}`, () => assert.ok(checkCommand(command, [entry])))
+
+  test('allows unrelated slash path', () =>
+    assert.equal(checkCommand('cat docs/readme.md', ['cat secrets/prod.env']), undefined))
+})
+
 describe('checkCommand', () => {
   const blocked = [
     'pa show x',
