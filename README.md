@@ -182,7 +182,7 @@ timeoutMs = 30000
 - Session start reports how many secrets loaded and from which sources, never values.
 - Degraded session: a required source failed where it applies, so every tool not in `degradedAllowTools` is blocked, `!` commands included.
 - `/motus status`: loaded counts, failures and state.
-- `/motus continue`: accept partial protection for this session. Blocks still apply.
+- `/motus continue`: accept partial protection for this session. Blocks still apply. Refused when the config did not load (missing, invalid, or an unresolvable `blockPaths` entry): motus cannot enforce blocks it never read. Fix the config and restart.
 - There is no `/motus off`. Read secret values in your own terminal.
 
 ## 1.0 stability

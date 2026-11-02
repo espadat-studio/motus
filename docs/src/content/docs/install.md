@@ -33,10 +33,10 @@ Without a config file every session starts degraded. See [Configuration](/config
 
 Commands inside [pi](https://github.com/earendil-works/pi):
 
-| Command           | Does                                                            |
-| ----------------- | --------------------------------------------------------------- |
-| `/motus status`   | Shows loaded counts, failures and state                         |
-| `/motus continue` | Accepts partial protection for this session. Blocks still apply |
+| Command           | Does                                                                                                |
+| ----------------- | --------------------------------------------------------------------------------------------------- |
+| `/motus status`   | Shows loaded counts, failures and state                                                             |
+| `/motus continue` | Accepts partial protection for this session. Blocks still apply. Refused if the config did not load |
 
 There is no `/motus off`. Turning redaction off would send secrets to the model. Read secret values in your own terminal.
 

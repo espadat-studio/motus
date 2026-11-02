@@ -23,7 +23,7 @@ async function setup(config: unknown = {}, extraEnv: Record<string, string> = {}
   homes.push(home)
   await mkdir(join(home, 'vault'))
   const configPath = join(home, 'config.toml')
-  if (config !== NOT_LOADED) await writeFile(configPath, stringify(config))
+  if (config !== NOT_LOADED) await writeFile(configPath, typeof config === 'string' ? config : stringify(config))
   const handlers = new Map<string, Handler>()
   let command: Handler = () => undefined
   const pi = {
@@ -116,6 +116,28 @@ describe('degraded state', () => {
     assert.equal(await emit('tool_call', { toolName: 'grep', input: {} }), undefined)
     assert.ok(await emit('tool_call', { toolName: 'bash', input: { command: 'pa show x' } }))
   })
+})
+
+describe('/motus continue when blocks did not load', () => {
+  const cases: [string, unknown][] = [
+    ['unknown key', { nope: 1 }],
+    ['bad source option', { sources: [{ type: 'command', command: 'true', bogus: 1 }] }],
+    ['invalid TOML', 'not = [valid'],
+    ['unset blockPaths variable', { blockPaths: ['$MOTUS_UNSET/x'], blockCommands: ['pa'] }],
+    ['missing config', NOT_LOADED],
+  ]
+
+  for (const [name, config] of cases) {
+    test(`refuses after ${name}`, async () => {
+      const { emit, motus, notes, home } = await setup(config)
+      await motus('continue')
+      assert.equal(notes.at(-1)?.type, 'error')
+      assert.match(notes.at(-1)?.message ?? '', /fix the config/i)
+      assert.ok(await emit('tool_call', { toolName: 'grep', input: {} }))
+      const shell = await emit('user_bash', { command: 'touch made', cwd: home, excludeFromContext: false })
+      assert.equal((shell as { result: { exitCode: number } }).result.exitCode, 1)
+    })
+  }
 })
 
 describe('tool_call', () => {
