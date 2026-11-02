@@ -59,6 +59,32 @@ describe('createMatcher', () => {
     assert.equal(redact('url=fix%40ture%2fpa%2bss'), 'url=[REDACTED:DB_PASSWORD]')
   })
 
+  describe('percent-encoder spellings', () => {
+    const value = "p@ss w/rd!'()*~x"
+    const spellings = {
+      'RFC 3986 strict': 'p%40ss%20w%2Frd%21%27%28%29%2A~x',
+      'RFC 3986 with ~ encoded': 'p%40ss%20w%2Frd%21%27%28%29%2A%7Ex',
+      'python quote': 'p%40ss%20w/rd%21%27%28%29%2A~x',
+      'python quote_plus': 'p%40ss+w%2Frd%21%27%28%29%2A~x',
+      'plus beside literal slash': 'p%40ss+w/rd%21%27%28%29%2A~x',
+      URLSearchParams: new URLSearchParams({ k: value }).toString().slice(2),
+      encodeURIComponent: encodeURIComponent(value),
+    }
+    for (const [encoder, spelling] of Object.entries(spellings)) {
+      for (
+        const [label, text] of [['uppercase hex', spelling], [
+          'lowercase hex',
+          spelling.replace(/%[0-9A-F]{2}/g, (m) => m.toLowerCase()),
+        ]]
+      ) {
+        test(`redacts ${encoder} in ${label}`, () => {
+          const { redact } = createMatcher([{ name: 'PW', value }], OPTIONS)
+          assert.equal(redact(`k=${text}&`), 'k=[REDACTED:PW]&')
+        })
+      }
+    }
+  })
+
   test('redacts whole vendor-prefixed tokens', () => {
     const { redact } = createMatcher([], OPTIONS)
     const tokens = {

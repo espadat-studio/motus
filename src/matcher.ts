@@ -106,9 +106,26 @@ function ansiCQuoted(value: string): string {
   )
 }
 
+const PERCENT_VARIANTS: readonly (readonly [RegExp, (match: string) => string])[] = [
+  [/%20/g, () => '+'],
+  [/%2F/g, () => '/'],
+  [/~/g, () => '%7E'],
+  [/[!'()]/g, (char: string) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`],
+  [/\*/g, () => '%2A'],
+]
+
 function percentEncodedForms(value: string): string[] {
-  const encoded = encodeURIComponent(value)
-  return [encoded, lowercaseEscapes(encoded)]
+  const base = encodeURIComponent(value)
+  const forms = new Set<string>()
+  for (let mask = 0; mask < 1 << PERCENT_VARIANTS.length; mask++) {
+    const encoded = PERCENT_VARIANTS.reduce(
+      (text, [pattern, replacement], index) => (mask & (1 << index) ? text.replace(pattern, replacement) : text),
+      base,
+    )
+    forms.add(encoded)
+    forms.add(lowercaseEscapes(encoded))
+  }
+  return [...forms]
 }
 
 function lowercaseEscapes(text: string): string {
