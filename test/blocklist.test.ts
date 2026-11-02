@@ -136,6 +136,60 @@ describe('checkCommand comments', () => {
   })
 })
 
+describe('checkCommand redirections', () => {
+  const blocked = [
+    'env 2>&1 | grep KEY',
+    'env 2>/dev/null | grep KEY',
+    'env >&2',
+    'nohup env 2>&1',
+    'command env 2>&1',
+    'env > file',
+    'env &> out',
+    'env &>> out',
+    'env >> out',
+    'env >| out',
+    'env 2> err',
+    'env <&0',
+    '2>&1 env',
+    '>out env',
+    '</dev/null env',
+    'env>out',
+    'cat <.env',
+    'cat< .env',
+    '<.env cat',
+    'cat 2>/dev/null .env',
+    'cat .env 2>/dev/null',
+    'cat >&.env',
+    'cat < "$(pa s x)"',
+  ]
+  for (const command of blocked) {
+    test(`blocks ${command}`, () => {
+      assert.ok(checkCommand(command, [...COMMANDS, 'env']))
+    })
+  }
+
+  for (
+    const command of [
+      'env FOO=1 ls 2>&1',
+      'env FOO=1 ls >/dev/null',
+      'ls 2>&1 | grep x',
+      'echo a2>out',
+      'ls &>out',
+      'cat <(echo hi)',
+      'diff <(echo a) >(cat)',
+      'ls >',
+    ]
+  ) {
+    test(`allows ${command}`, () => {
+      assert.equal(checkCommand(command, [...COMMANDS, 'env']), undefined)
+    })
+  }
+
+  test('a digit glued to a word is not an fd prefix', () => {
+    assert.ok(checkCommand('pa2>out show x', ['pa2']))
+  })
+})
+
 describe('checkCommand heredocs', () => {
   const HEREDOC_COMMANDS = ['env', 'pam']
   const body = '`env` and $(pam s x)\n'
