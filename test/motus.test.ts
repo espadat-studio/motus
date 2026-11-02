@@ -121,6 +121,12 @@ describe('degraded state', () => {
 describe('tool_call', () => {
   const config = { blockCommands: ['pa'], blockPaths: ['~/vault/'] }
 
+  test('blocks commands after comments holding quotes', async () => {
+    const { emit } = await setup(config)
+    for (const command of ["# Let's look\npa show x", '# "x\npa show x', "echo $(# it's\npa show x)"])
+      assert.ok(await emit('tool_call', { toolName: 'bash', input: { command } }), command)
+  })
+
   test('blocks commands and path spellings in bash', async () => {
     const { emit } = await setup(config)
     assert.ok(await emit('tool_call', { toolName: 'bash', input: { command: 'echo $(pa show x)' } }))
