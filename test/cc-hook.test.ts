@@ -117,6 +117,24 @@ describe('runHook', () => {
     assert.match(denyReason(await runHook(toolUse('Read', { file_path: '/x' }), unset, env)) ?? '', /\$NOPE/)
   })
 
+  test('denies on an empty variable in blockPaths', async () => {
+    const empty = join(home, 'empty.toml')
+    writeFileSync(empty, stringify({ blockPaths: ['$EMPTY/x'] }))
+    assert.match(
+      denyReason(await runHook(toolUse('Read', { file_path: '/x' }), empty, { ...env, EMPTY: '' })) ?? '',
+      /failing closed.*\$EMPTY/,
+    )
+  })
+
+  test('denies on an empty HOME even with no blockPaths', async () => {
+    const bare = join(home, 'bare.toml')
+    writeFileSync(bare, '')
+    assert.match(
+      denyReason(await runHook(toolUse('Read', { file_path: '/x' }), bare, { HOME: '' })) ?? '',
+      /failing closed.*HOME/,
+    )
+  })
+
   for (const input of ['not json', toolUse('Bash', {}), toolUse('Read', { file_path: 1 })]) {
     test(`denies malformed input ${input}`, async () => {
       assert.ok(denyReason(await runHook(input, configPath, env)))

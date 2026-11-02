@@ -76,6 +76,14 @@ describe('session_start', () => {
     assert.ok(await emit('tool_call', { toolName: 'ls', input: {} }))
   })
 
+  for (const entry of ['$MOTUS_EMPTY/x', '${MOTUS_EMPTY}/x', '$MOTUS_EMPTY/', '${MOTUS_NOPE:-}/x']) {
+    test(`${entry} in blockPaths degrades the session`, async () => {
+      const { emit, notes } = await setup({ blockPaths: [entry] }, { MOTUS_EMPTY: '' })
+      assert.equal(notes.at(-1)?.type, 'error')
+      assert.ok(await emit('tool_call', { toolName: 'ls', input: {} }))
+    })
+  }
+
   test('an optional failing source only warns', async () => {
     const { notes, emit } = await setup({ sources: [{ type: 'command', command: 'exit 3', required: false }] })
     assert.equal(notes[0]?.type, 'warning')

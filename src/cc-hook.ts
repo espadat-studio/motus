@@ -28,7 +28,7 @@ async function checkToolUse(
   env: NodeJS.ProcessEnv,
 ): Promise<string | undefined> {
   const home = env['HOME']
-  if (home === undefined) throw new Error('HOME is not set')
+  if (!home) throw new Error('HOME is not set or empty')
   const config = await readConfig(configPath, env)
   const blockPaths = resolveBlockPaths(config.blockPaths, env)
   if (tool_name === 'Bash') {

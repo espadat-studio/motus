@@ -39,7 +39,7 @@ blockCommands = ["env", "printenv", "mise env", "cat .env*"]
 
 ## Block paths
 
-Entries expand `~`, `$HOME`, environment variables and `${VAR:-fallback}`, then resolve with `realpath`. A directory entry blocks everything beneath it. An unset variable with no fallback makes the config invalid.
+Entries expand `~`, `$HOME`, environment variables and `${VAR:-fallback}`, then resolve with `realpath`. A directory entry blocks everything beneath it. An unset or empty variable with no non-empty fallback makes the config invalid.
 
 - Path tools (`read`, `grep`, `find`, `ls`, `edit`, `write`, MCP filesystem tools) have their argument resolved against the working directory, then compared.
 - In bash, a command is blocked when it contains the absolute, `~/` or `$HOME/` spelling of an entry.
