@@ -53,7 +53,7 @@ export function miseSource(id: string, listFile: string, env: NodeJS.ProcessEnv)
     id,
     appliesTo: async ({ cwd }) =>
       (await cwdAgeFiles(cwd, env)).length > 0 || (await taskFiles(await ancestors(cwd))).length > 0,
-    load: async ({ cwd, signal, warn }) => {
+    load: async ({ cwd, signal, warn, progress }) => {
       const listed = await readList(listFile, env)
       const drift = (await cwdAgeFiles(cwd, env)).filter(({ path }) => !listed.includes(path))
       for (const { path, keys } of drift) {
@@ -77,7 +77,7 @@ export function miseSource(id: string, listFile: string, env: NodeJS.ProcessEnv)
           load: loadTaskFile(id, keys, baseEnv, signal, roots.has(root)),
         })),
       ]
-      const outcomes = await Promise.allSettled(loads.map(({ load }) => load))
+      const outcomes = await Promise.allSettled(loads.map(({ load }) => load.finally(progress)))
       const secrets: Secret[] = []
       const failures: string[] = []
       for (const [index, outcome] of outcomes.entries()) {

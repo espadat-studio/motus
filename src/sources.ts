@@ -13,7 +13,7 @@ export interface Secret {
 export interface SecretSource {
   id: string
   appliesTo(ctx: { cwd: string }): Promise<boolean>
-  load(ctx: { cwd: string; signal: AbortSignal; warn(message: string): void }): Promise<Secret[]>
+  load(ctx: { cwd: string; signal: AbortSignal; warn(message: string): void; progress(): void }): Promise<Secret[]>
 }
 
 export class PartialLoadError extends Error {
@@ -82,20 +82,30 @@ async function loadOne(
   { source, required, timeoutMs }: ConfiguredSource,
   cwd: string,
 ): Promise<{ id: string; secrets?: Secret[]; failure?: SourceFailure; warnings: string[] }> {
-  const signal = AbortSignal.timeout(timeoutMs)
+  const timeout = `timed out after ${timeoutMs} ms`
+  const controller = new AbortController()
+  const { signal } = controller
+  let timer: NodeJS.Timeout | undefined
+  const progress = (): void => {
+    if (signal.aborted) return
+    clearTimeout(timer)
+    timer = setTimeout(() => controller.abort(new DOMException(timeout, 'TimeoutError')), timeoutMs)
+  }
+  progress()
   const warnings: string[] = []
   const warn = (message: string): void => {
     warnings.push(`${source.id} warning: ${message}`)
   }
-  const settled = source.load({ cwd, signal, warn }).then(
+  const settled = source.load({ cwd, signal, warn, progress }).then(
     (secrets): Settled => ({ secrets }),
     (error: unknown): Settled => ({ error }),
   )
   const aborted = rejectOnAbort(signal).catch(() => undefined)
-  const outcome = (await Promise.race([settled, aborted])) ?? (await settleWithin(settled, ABORT_GRACE_MS))
+  const first = await Promise.race([settled, aborted])
+  clearTimeout(timer)
+  const outcome = first ?? (await settleWithin(settled, ABORT_GRACE_MS))
   if (outcome && 'secrets' in outcome) return { id: source.id, secrets: outcome.secrets, warnings }
   const error = outcome?.error
-  const timeout = `timed out after ${timeoutMs} ms`
   if (error instanceof PartialLoadError) {
     const reason = signal.aborted ? `${timeout}: ${error.message}` : error.message
     return {
