@@ -57,6 +57,7 @@ describe('runHook', () => {
     ['Bash', { command: 'true # trailing\npa show x' }],
     ['Bash', { command: '# ((\npa show x' }],
     ['Bash', { command: "echo $(# it's\npa show x)" }],
+    ['Bash', { command: 'true && \\\npa show x' }],
     ['Read', { file_path: join(home, '.config/mise/age.txt') }],
     ['Read', { file_path: '.config/mise/age.txt' }],
   ]
@@ -127,6 +128,11 @@ describe('motus-cc-hook bin', () => {
 
   test('denies a blocked command after a comment', () => {
     const { stdout } = run(toolUse('Bash', { command: "# Let's look\nenv" }))
+    assert.match(denyReason(stdout) ?? '', /"env"/)
+  })
+
+  test('denies a blocked command after a line continuation', () => {
+    const { stdout } = run(toolUse('Bash', { command: 'true && \\\nenv' }))
     assert.match(denyReason(stdout) ?? '', /"env"/)
   })
 

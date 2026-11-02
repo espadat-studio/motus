@@ -165,7 +165,7 @@ function splitCommands(source: string, bodies: string[]): string[][] {
     } else if (char === '#' && word === undefined)
       index = findClosing(source, '\n', index) - 1
     else if (char === '\\') {
-      word = (word ?? '') + (source[index + 1] ?? '')
+      if (source[index + 1] !== '\n') word = (word ?? '') + (source[index + 1] ?? '')
       index++
     } else if (char === "'") {
       const end = findClosing(source, "'", index + 1)
@@ -177,6 +177,8 @@ function splitCommands(source: string, bodies: string[]): string[][] {
         const inner = findSubstitution(source, index)
         if (inner !== undefined)
           index = substitute(inner)
+        else if (source[index] === '\\' && source[index + 1] === '\n')
+          index++
         else if (source[index] === '\\' && '"\\$`'.includes(source[index + 1] ?? '')) {
           word += source[index + 1]
           index++
