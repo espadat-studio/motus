@@ -175,13 +175,13 @@ Block reasons, status text and derived forms may change in a minor release. So m
 
 ## Failure modes
 
-| Failure                                                     | Behavior                                                                                                                     |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Required source throws or times out, and applies to the cwd | Degraded state: block every tool not allowlisted, with a reason; `/motus continue` overrides for the session                 |
-| Required source fails, doesn't apply to the cwd             | Warn once                                                                                                                    |
-| One of N mise files fails to decrypt                        | Redact what loaded; name the failed file in the warning; degraded only if it covers the cwd                                  |
-| Redaction hook throws                                       | `tool_result`, `user_bash`: replace output with an error marker, never raw. `before_provider_request`: send an empty payload |
-| Invalid config                                              | Same as a failed required source                                                                                             |
+| Failure                                                     | Behavior                                                                                                                       |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Required source throws or times out, and applies to the cwd | Degraded state: block every tool not allowlisted, with a reason; `/motus continue` overrides for the session, if blocks loaded |
+| Required source fails, doesn't apply to the cwd             | Warn once                                                                                                                      |
+| One of N mise files fails to decrypt                        | Redact what loaded; name the failed file in the warning; degraded only if it covers the cwd                                    |
+| Redaction hook throws                                       | `tool_result`, `user_bash`: replace output with an error marker, never raw. `before_provider_request`: send an empty payload   |
+| Invalid or missing config, or unresolvable `blockPaths`     | Degraded. `/motus continue` refuses: blocks did not load and cannot be enforced. Fix the config and restart                    |
 
 ## Claude Code hook (D2, D11, D19)
 

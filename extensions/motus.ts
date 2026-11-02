@@ -23,6 +23,7 @@ interface State {
   config: Config | undefined
   matcher: Matcher
   blockPaths: string[]
+  blocksLoaded: boolean
   loadedNames: Set<string>
   degraded: string | undefined
   continued: boolean
@@ -40,6 +41,7 @@ export function createMotus(
       config: undefined,
       matcher: createMatcher([], { prefixes: DEFAULT_PREFIXES, minValueLength: DEFAULT_MIN_VALUE_LENGTH }),
       blockPaths: [],
+      blocksLoaded: false,
       loadedNames: new Set(),
       degraded: 'secrets are not loaded yet',
       continued: false,
@@ -132,6 +134,12 @@ export function createMotus(
         if (subcommand !== 'continue')
           return ctx.ui.notify(`motus: unknown subcommand "${subcommand}"; use status or continue`, 'error')
         if (!state.degraded) return ctx.ui.notify('motus: session is not degraded', 'info')
+        if (!state.blocksLoaded) {
+          return ctx.ui.notify(
+            'motus: cannot continue: blocks did not load, so motus cannot enforce them. Fix the config and restart the session',
+            'error',
+          )
+        }
         state = { ...state, degraded: undefined, continued: true }
         ctx.ui.notify('motus: partial protection accepted for this session; blocks still apply', 'warning')
       },
@@ -144,9 +152,11 @@ export default createMotus({ configPath: DEFAULT_CONFIG_PATH, env: process.env }
 async function loadState(configPath: string, cwd: string, env: NodeJS.ProcessEnv): Promise<State> {
   const { config, result } = await loadFromConfig(configPath, cwd, env)
   let blockPaths: string[] = []
+  let blocksLoaded = config !== undefined
   try {
     blockPaths = resolveBlockPaths(config?.blockPaths ?? [], env)
   } catch (error) {
+    blocksLoaded = false
     result.failures.push({ id: 'config', required: true, applies: true, reason: (error as Error).message })
   }
   const matcher = createMatcher(result.secrets, {
@@ -158,6 +168,7 @@ async function loadState(configPath: string, cwd: string, env: NodeJS.ProcessEnv
     config,
     matcher,
     blockPaths,
+    blocksLoaded,
     loadedNames: new Set(result.secrets.map(({ name }) => name)),
     degraded: failed.length > 0 ? `required source failed: ${failed.join(', ')}` : undefined,
     continued: false,
@@ -166,9 +177,13 @@ async function loadState(configPath: string, cwd: string, env: NodeJS.ProcessEnv
   }
 }
 
-function describeState({ report, degraded, continued }: State): string {
+function describeState({ report, degraded, continued, blocksLoaded }: State): string {
   const mode = degraded
-    ? `degraded: ${degraded}. /motus continue accepts partial protection`
+    ? `degraded: ${degraded}. ${
+      blocksLoaded
+        ? '/motus continue accepts partial protection'
+        : 'fix the config: /motus continue is refused until blocks load'
+    }`
     : continued
     ? 'partial protection accepted for this session'
     : 'active'
