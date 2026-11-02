@@ -204,6 +204,23 @@ describe('createMatcher', () => {
         assert.equal(redact('out Qm7Zx4Vb9Lk2Wt end'), 'out [REDACTED:HASH_URL] end')
       })
 
+      test('redacts hash parameter values and query values printed apart', () => {
+        const { redact } = createMatcher([
+          {
+            name: 'HASH_URL',
+            value: `https://app.example.test/cb#access_token=${SECRET}&state=1&key=Qm7Zx4Vb9Lk2Wt6Rp8`,
+          },
+          {
+            name: 'DB_URL',
+            value: 'postgres://fixtureuser0001@localhost:5432/app?user=app&password=Qm7Zx4Vb9Lk2Wt6Rp8',
+          },
+        ], OPTIONS)
+        assert.doesNotMatch(redact(`access_token=${SECRET}`), new RegExp(SECRET))
+        assert.doesNotMatch(redact('GET /?password=Qm7Zx4Vb9Lk2Wt6Rp8'), /Qm7Zx4Vb9Lk2Wt6Rp8/)
+        assert.equal(redact('Qm7Zx4Vb9Lk2Wt6Rp8'), '[REDACTED:HASH_URL]')
+        assert.equal(redact('user=app state=1'), 'user=app state=1')
+      })
+
       test('redacts a query value in raw and decoded spellings', () => {
         const value = 'https://lb.example.test/rpc?token=Qm7+Zx4Vb9%2FLk2Wt6Rp8'
         const { redact } = createMatcher([{ name: 'RPC_URL', value }], OPTIONS)

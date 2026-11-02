@@ -82,8 +82,9 @@ function urlPartForms(value: string): string[] | undefined {
   const parts = [
     url.username,
     ...url.pathname.split('/'),
-    ...url.search.slice(1).split('&').map((pair) => pair.slice(pair.indexOf('=') + 1)),
+    ...url.search.slice(1).split('&').map(parameterValue),
     url.hash.slice(1),
+    ...url.hash.slice(1).split('&').map(parameterValue),
   ]
     .filter((part) => !ORDINARY_URL_TEXT.test(decode(part)))
   if (![decode(url.username), url.protocol.slice(0, -1)].includes(decode(url.password))) parts.push(url.password)
@@ -91,6 +92,10 @@ function urlPartForms(value: string): string[] | undefined {
     const decoded = decode(part)
     return [part, lowercaseEscapes(part), decoded, ...percentEncodedForms(decoded)]
   })
+}
+
+function parameterValue(pair: string): string {
+  return pair.slice(pair.indexOf('=') + 1)
 }
 
 function fragments(forms: readonly string[]): string[] {
