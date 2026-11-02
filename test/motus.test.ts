@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 
-import { type ExtensionAPI, SessionManager } from '@earendil-works/pi-coding-agent'
+import { convertToLlm, type ExtensionAPI, serializeConversation, SessionManager } from '@earendil-works/pi-coding-agent'
 import { stringify } from 'smol-toml'
 
 import { createMotus } from '../extensions/motus.ts'
@@ -334,6 +334,20 @@ describe('summarization hooks', () => {
     const { emit } = await setup()
     const prep = { ...preparation(), messagesToSummarize: [cyclic()] }
     assert.deepEqual(await emit('session_before_compact', { preparation: prep }), { cancel: true })
+  })
+
+  test('a raw custom message in a real session never reaches the compaction request', async () => {
+    const { emit } = await setup()
+    const session = SessionManager.inMemory('/tmp')
+    session.appendMessage({ role: 'user', content: 'hi', timestamp: 0 })
+    session.appendCustomMessageEntry('other-extension', `key ${TOKEN}`, true, { note: TOKEN })
+    const messages = session.buildSessionContext().messages
+    assert.ok(JSON.stringify(session.getEntries()).includes(TOKEN))
+    const preparation = { messagesToSummarize: messages, turnPrefixMessages: [] }
+    await emit('session_before_compact', { preparation })
+    const request = serializeConversation(convertToLlm(preparation.messagesToSummarize))
+    assert.match(request, /key \[REDACTED:API_TOKEN\]/)
+    assert.ok(!request.includes(TOKEN))
   })
 
   test('branch summary redacts the existing entries array and instructions', async () => {
