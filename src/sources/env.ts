@@ -4,6 +4,7 @@ const SECRET_NAME = /KEY|TOKEN|SECRET|PASS|PRIVATE|MNEMONIC|DATABASE_URL|AUTH|CR
 const DENIED_NAMES = new Set(['SSH_AUTH_SOCK', 'KITTY_PUBLIC_KEY', 'XAUTHORITY', 'PASSWORD_STORE_DIR'])
 const DATABASE_URL_NAME = /DATABASE_URL/i
 const MISE_STATE_NAMES = new Set(['__MISE_DIFF', '__MISE_SESSION'])
+const PATH_ENTRY = /^~?\/[\w.@/-]*$/
 
 function isCredentialFreeUrl(value: string): boolean {
   const url = URL.parse(value)
@@ -11,9 +12,14 @@ function isCredentialFreeUrl(value: string): boolean {
     && !/[;#]/.test(value)
 }
 
+function isPathList(value: string): boolean {
+  return value.split(':').every((entry) => PATH_ENTRY.test(entry))
+}
+
 function isSecret(name: string, value: string): boolean {
   if (MISE_STATE_NAMES.has(name)) return true
   if (!SECRET_NAME.test(name) || DENIED_NAMES.has(name) || name.startsWith('GUM_')) return false
+  if (isPathList(value)) return false
   return !(DATABASE_URL_NAME.test(name) && isCredentialFreeUrl(value))
 }
 
