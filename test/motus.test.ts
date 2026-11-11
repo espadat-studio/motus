@@ -407,7 +407,8 @@ describe('redaction', () => {
   })
 
   test('a path-valued secret-looking env var keeps home paths readable', async () => {
-    const androidDir = '/home/fixture/.config/android'
+    const androidDir = await mkdtemp(join(tmpdir(), 'motus-android-'))
+    homes.push(androidDir)
     const { emit } = await setup({}, { ADB_VENDOR_KEYS: androidDir })
     const text = `${androidDir}/adbkey\n${TOKEN}`
     const result = await emit('tool_result', { content: [{ type: 'text', text }], details: {} })
