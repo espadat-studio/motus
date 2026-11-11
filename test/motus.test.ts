@@ -406,6 +406,19 @@ describe('redaction', () => {
     })
   })
 
+  test('a path-valued secret-looking env var keeps home paths readable', async () => {
+    const androidDir = await mkdtemp(join(tmpdir(), 'motus-android-'))
+    homes.push(androidDir)
+    const { emit } = await setup({}, { ADB_VENDOR_KEYS: androidDir })
+    const text = `${androidDir}/adbkey\n${TOKEN}`
+    const result = await emit('tool_result', { content: [{ type: 'text', text }], details: {} })
+    assert.deepEqual(result, {
+      content: [{ type: 'text', text: `${androidDir}/adbkey\n[REDACTED:API_TOKEN]` }],
+      details: {},
+    })
+    assert.equal(await emit('tool_call', { toolName: 'read', input: { path: `${androidDir}/adbkey` } }), undefined)
+  })
+
   test('tool_result returns an error marker when redaction fails', async () => {
     const { emit } = await setup()
     const result = await emit('tool_result', { content: [{ type: 'text', text: TOKEN }], details: cyclic() }) as {

@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+
 import type { Secret, SecretSource } from '../sources.ts'
 
 const SECRET_NAME = /KEY|TOKEN|SECRET|PASS|PRIVATE|MNEMONIC|DATABASE_URL|AUTH|CREDENTIAL|DSN/i
@@ -11,9 +14,20 @@ function isCredentialFreeUrl(value: string): boolean {
     && !/[;#]/.test(value)
 }
 
-function isSecret(name: string, value: string): boolean {
+function isExistingPath(entry: string, home: string | undefined): boolean {
+  if (entry.startsWith('/')) return existsSync(entry)
+  if (!home || !entry.startsWith('~/')) return false
+  return existsSync(join(home, entry.slice(2)))
+}
+
+function isPathList(value: string, home: string | undefined): boolean {
+  return value.split(':').every((entry) => isExistingPath(entry, home))
+}
+
+function isSecret(name: string, value: string, home: string | undefined): boolean {
   if (MISE_STATE_NAMES.has(name)) return true
   if (!SECRET_NAME.test(name) || DENIED_NAMES.has(name) || name.startsWith('GUM_')) return false
+  if (isPathList(value, home)) return false
   return !(DATABASE_URL_NAME.test(name) && isCredentialFreeUrl(value))
 }
 
@@ -24,7 +38,7 @@ export function envSource(env: NodeJS.ProcessEnv, id = 'env'): SecretSource {
     load: async () => {
       const secrets: Secret[] = []
       for (const [name, value] of Object.entries(env))
-        if (value && isSecret(name, value)) secrets.push({ name, value, source: id })
+        if (value && isSecret(name, value, env['HOME'])) secrets.push({ name, value, source: id })
       return secrets
     },
   }
