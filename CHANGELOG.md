@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/espadat-studio/motus/compare/v1.3.3...v1.4.0) (2026-11-12)
+
+
+### Features
+
+* **pi:** reload sources in a degraded session without restarting ([#100](https://github.com/espadat-studio/motus/issues/100)) ([47136c5](https://github.com/espadat-studio/motus/commit/47136c572593f5b8a3bfac3da0decbd43b25e8dd))
+
 ## [1.3.3](https://github.com/espadat-studio/motus/compare/v1.3.2...v1.3.3) (2026-11-11)
 
 
