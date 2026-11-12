@@ -56,7 +56,7 @@ _Avoid_: deny, guard
 A file whose contents unlock secrets (age identity, password-store keys). Blocked by path, never read.
 
 **Degraded state**:
-Session state after a required source failed where it applies. Every tool not allowlisted is blocked until the human accepts partial protection.
+Session state after a required source failed where it applies. Every tool not allowlisted is blocked until a reload loads every required source or the human accepts partial protection.
 
 **Accidental leak**:
 A well-meaning agent printing a secret. The only threat motus defends against.

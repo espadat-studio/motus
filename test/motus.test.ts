@@ -192,6 +192,61 @@ describe('degraded state', () => {
   })
 })
 
+describe('/motus reload', () => {
+  const LATE = 'fixture-late-value-0002'
+  const fromFile = { sources: [{ type: 'command', id: 'file', command: 'cat secrets.json' }] }
+  const redacted = async (emit: Awaited<ReturnType<typeof setup>>['emit'], text: string) =>
+    ((await emit('tool_result', { content: [{ type: 'text', text }], details: {} })) as {
+      content: { text: string }[]
+    })
+      .content[0]
+      ?.text
+
+  test('ends the degraded state once the failed source loads, and redacts its secrets', async () => {
+    const { emit, motus, notes, home } = await setup(fromFile)
+    assert.ok(await emit('tool_call', { toolName: 'grep', input: {} }))
+    await writeFile(join(home, 'secrets.json'), JSON.stringify({ LATE_TOKEN: LATE }))
+    await motus('reload')
+    assert.equal(notes.at(-1)?.type, 'info')
+    assert.match(notes.at(-1)?.message ?? '', /2 secrets from env \(1\), file \(1\)\nstatus: active$/)
+    assert.equal(await emit('tool_call', { toolName: 'grep', input: {} }), undefined)
+    assert.equal(await redacted(emit, `${LATE} ${TOKEN}`), '[REDACTED:LATE_TOKEN] [REDACTED:API_TOKEN]')
+    await motus('status')
+    assert.match(notes.at(-1)?.message ?? '', /status: active$/)
+  })
+
+  test('stays degraded with the latest reason when the source still fails', async () => {
+    const { emit, motus, notes, home } = await setup(fromFile)
+    await writeFile(join(home, 'secrets.json'), 'not json')
+    await motus('reload')
+    assert.equal(notes.at(-1)?.type, 'error')
+    const { reason } = (await emit('tool_call', { toolName: 'grep', input: {} })) as { reason: string }
+    assert.match(reason, /required source failed: file \(stdout is not a JSON object of string values\)/)
+    assert.ok(!reason.includes('exited with code'))
+  })
+
+  test('after continue, restores full protection when every source loads', async () => {
+    const { motus, notes, home } = await setup(fromFile)
+    await motus('continue')
+    await writeFile(join(home, 'secrets.json'), '{}')
+    await motus('reload')
+    await motus('status')
+    assert.match(notes.at(-1)?.message ?? '', /status: active$/)
+  })
+
+  test('in a session that is not degraded, refreshes the value set and reports counts', async () => {
+    const { emit, motus, notes, home } = await setup(fromFile)
+    await writeFile(join(home, 'secrets.json'), '{}')
+    await motus('reload')
+    assert.equal(await emit('tool_call', { toolName: 'grep', input: {} }), undefined)
+    assert.equal(await redacted(emit, LATE), LATE)
+    await writeFile(join(home, 'secrets.json'), JSON.stringify({ LATE_TOKEN: LATE }))
+    await motus('reload')
+    assert.match(notes.at(-1)?.message ?? '', /2 secrets from env \(1\), file \(1\)/)
+    assert.equal(await redacted(emit, LATE), '[REDACTED:LATE_TOKEN]')
+  })
+})
+
 describe('prompts during a slow load', () => {
   const slow = { sources: [{ type: 'command', command: 'sleep 0.3; exit 3', required: false }] }
   const message = { role: 'user', content: [{ type: 'text', text: `use ${TOKEN}` }] }

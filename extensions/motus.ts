@@ -189,17 +189,26 @@ export function createMotus(
     })
 
     pi.registerCommand('motus', {
-      description: 'motus status | continue',
+      description: 'motus status | continue | reload',
       handler: async (args, ctx) => {
         const subcommand = args.trim()
         if (subcommand === 'status' || subcommand === '') return notifyOperator(ctx, describeState(state), 'info')
-        if (subcommand !== 'continue')
-          return notifyOperator(ctx, `motus: unknown subcommand "${subcommand}"; use status or continue`, 'error')
+        if (subcommand === 'reload') {
+          state = await loadState(configPath, ctx.cwd, env)
+          return notifyOperator(ctx, describeState(state), state.level)
+        }
+        if (subcommand !== 'continue') {
+          return notifyOperator(
+            ctx,
+            `motus: unknown subcommand "${subcommand}"; use status, continue or reload`,
+            'error',
+          )
+        }
         if (!state.degraded) return notifyOperator(ctx, 'motus: session is not degraded', 'info')
         if (!state.blocksLoaded) {
           return notifyOperator(
             ctx,
-            'motus: cannot continue: blocks did not load, so motus cannot enforce them. Fix the config and restart the session',
+            'motus: cannot continue: blocks did not load, so motus cannot enforce them. Fix the config and run /motus reload',
             'error',
           )
         }
@@ -252,8 +261,8 @@ function describeState({ report, degraded, continued, blocksLoaded }: State): st
   const mode = degraded
     ? `degraded: ${degraded}. ${
       blocksLoaded
-        ? '/motus continue accepts partial protection'
-        : 'fix the config: /motus continue is refused until blocks load'
+        ? '/motus reload retries the sources; /motus continue accepts partial protection'
+        : 'fix the config and run /motus reload: /motus continue is refused until blocks load'
     }`
     : continued
     ? 'partial protection accepted for this session'
