@@ -9,7 +9,7 @@ A named value that must never reach the model or a saved session. Its name is no
 _Avoid_: credential (reserved for credential files), key
 
 **Source**:
-Somewhere secrets are loaded from at session start (environment, a command, mise, a password manager).
+Somewhere secrets are loaded from at session start or on reload (environment, a command, mise, a password manager).
 _Avoid_: provider, backend
 
 **Store**:
@@ -56,7 +56,7 @@ _Avoid_: deny, guard
 A file whose contents unlock secrets (age identity, password-store keys). Blocked by path, never read.
 
 **Degraded state**:
-Session state after a required source failed where it applies. Every tool not allowlisted is blocked until the human accepts partial protection.
+Session state after a required source failed where it applies. Every tool not allowlisted is blocked until a reload loads every required source or the human accepts partial protection.
 
 **Accidental leak**:
 A well-meaning agent printing a secret. The only threat motus defends against.

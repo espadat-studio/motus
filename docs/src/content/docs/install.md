@@ -39,6 +39,7 @@ Commands inside [pi](https://github.com/earendil-works/pi):
 | ----------------- | --------------------------------------------------------------------------------------------------- |
 | `/motus status`   | Shows loaded counts, failures and state                                                             |
 | `/motus continue` | Accepts partial protection for this session. Blocks still apply. Refused if the config did not load |
+| `/motus reload`   | Re-reads the config and loads every source again. Ends the degraded state if they all load          |
 
 There is no `/motus off`. Turning redaction off would send secrets to the model. Read secret values in your own terminal.
 

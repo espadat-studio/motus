@@ -21,7 +21,7 @@ import {
 } from '../src/blocklist.ts'
 import { type Config, DEFAULT_CONFIG_PATH, DEFAULT_MIN_VALUE_LENGTH, DEFAULT_PREFIXES } from '../src/config.ts'
 import { createMatcher, type Matcher } from '../src/matcher.ts'
-import { describeLoad, loadFromConfig } from '../src/sources.ts'
+import { describeLoad, loadFromConfig, type Secret } from '../src/sources.ts'
 
 const REDACTION_FAILED = '[motus: redaction failed, output withheld]'
 const COMMAND_FAILED = '[motus: command failed or its output could not be redacted, output withheld]'
@@ -34,6 +34,7 @@ interface State {
   matcher: Matcher
   blockPaths: string[]
   blocksLoaded: boolean
+  secrets: Secret[]
   loadedNames: Set<string>
   degraded: string | undefined
   continued: boolean
@@ -52,6 +53,7 @@ export function createMotus(
       matcher: createMatcher([], { prefixes: DEFAULT_PREFIXES, minValueLength: DEFAULT_MIN_VALUE_LENGTH }),
       blockPaths: [],
       blocksLoaded: false,
+      secrets: [],
       loadedNames: new Set(),
       degraded: 'secrets are not loaded yet',
       continued: false,
@@ -63,6 +65,7 @@ export function createMotus(
     const loaded = new Promise<void>((resolve) => {
       finishLoad = resolve
     })
+    let reloads = loaded
 
     const checkShellCommand = (command: string): string | undefined =>
       checkCommand(command, state.config?.blockCommands ?? [])
@@ -189,17 +192,30 @@ export function createMotus(
     })
 
     pi.registerCommand('motus', {
-      description: 'motus status | continue',
+      description: 'motus status | continue | reload',
       handler: async (args, ctx) => {
         const subcommand = args.trim()
         if (subcommand === 'status' || subcommand === '') return notifyOperator(ctx, describeState(state), 'info')
-        if (subcommand !== 'continue')
-          return notifyOperator(ctx, `motus: unknown subcommand "${subcommand}"; use status or continue`, 'error')
+        if (subcommand === 'reload') {
+          const reload = reloads.then(async () => {
+            state = await loadState(configPath, ctx.cwd, env, state.secrets)
+          })
+          reloads = reload.catch(() => undefined)
+          await reload
+          return notifyOperator(ctx, describeState(state), state.level)
+        }
+        if (subcommand !== 'continue') {
+          return notifyOperator(
+            ctx,
+            `motus: unknown subcommand "${subcommand}"; use status, continue or reload`,
+            'error',
+          )
+        }
         if (!state.degraded) return notifyOperator(ctx, 'motus: session is not degraded', 'info')
         if (!state.blocksLoaded) {
           return notifyOperator(
             ctx,
-            'motus: cannot continue: blocks did not load, so motus cannot enforce them. Fix the config and restart the session',
+            'motus: cannot continue: blocks did not load, so motus cannot enforce them. Fix the config and run /motus reload',
             'error',
           )
         }
@@ -212,8 +228,16 @@ export function createMotus(
 
 export default createMotus({ configPath: DEFAULT_CONFIG_PATH, env: process.env })
 
-async function loadState(configPath: string, cwd: string, env: NodeJS.ProcessEnv): Promise<State> {
+async function loadState(
+  configPath: string,
+  cwd: string,
+  env: NodeJS.ProcessEnv,
+  previous: Secret[] = [],
+): Promise<State> {
   const { config, result } = await loadFromConfig(configPath, cwd, env)
+  const values = new Set(result.secrets.map(({ value }) => value))
+  const kept = previous.filter(({ value }) => !values.has(value))
+  const secrets = [...result.secrets, ...kept]
   let blockPaths: string[] = []
   let blocksLoaded = config !== undefined
   try {
@@ -222,7 +246,7 @@ async function loadState(configPath: string, cwd: string, env: NodeJS.ProcessEnv
     blocksLoaded = false
     result.failures.push({ id: 'config', required: true, applies: true, reason: (error as Error).message })
   }
-  const matcher = createMatcher(result.secrets, {
+  const matcher = createMatcher(secrets, {
     prefixes: config?.prefixes ?? DEFAULT_PREFIXES,
     minValueLength: config?.minValueLength ?? DEFAULT_MIN_VALUE_LENGTH,
   })
@@ -235,10 +259,18 @@ async function loadState(configPath: string, cwd: string, env: NodeJS.ProcessEnv
     matcher,
     blockPaths,
     blocksLoaded,
-    loadedNames: new Set(result.secrets.map(({ name }) => name)),
+    secrets,
+    loadedNames: new Set(secrets.map(({ name }) => name)),
     degraded: failed.length > 0 ? `required source failed: ${failed.join(', ')}` : undefined,
     continued: false,
-    report: [describeLoad(result), ...matcher.warnings].join('\n'),
+    report: [
+      describeLoad(result),
+      ...(kept.length > 0
+        ? [`still redacting ${kept.length} secret${kept.length === 1 ? '' : 's'} from earlier loads`]
+        : []),
+      ...matcher.warnings,
+    ]
+      .join('\n'),
     level: failed.length > 0 ? 'error' : result.failures.length + matcher.warnings.length > 0 ? 'warning' : 'info',
   }
 }
@@ -252,8 +284,8 @@ function describeState({ report, degraded, continued, blocksLoaded }: State): st
   const mode = degraded
     ? `degraded: ${degraded}. ${
       blocksLoaded
-        ? '/motus continue accepts partial protection'
-        : 'fix the config: /motus continue is refused until blocks load'
+        ? '/motus reload retries the sources; /motus continue accepts partial protection'
+        : 'fix the config and run /motus reload: /motus continue is refused until blocks load'
     }`
     : continued
     ? 'partial protection accepted for this session'
