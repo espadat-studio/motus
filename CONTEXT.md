@@ -9,7 +9,7 @@ A named value that must never reach the model or a saved session. Its name is no
 _Avoid_: credential (reserved for credential files), key
 
 **Source**:
-Somewhere secrets are loaded from at session start (environment, a command, mise, a password manager).
+Somewhere secrets are loaded from at session start or on reload (environment, a command, mise, a password manager).
 _Avoid_: provider, backend
 
 **Store**:

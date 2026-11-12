@@ -186,7 +186,7 @@ timeoutMs = 30000
 - Degraded session: a required source failed where it applies, so every tool not in `degradedAllowTools` is blocked, `!` commands included.
 - `/motus status`: loaded counts, failures and state.
 - `/motus continue`: accept partial protection for this session. Blocks still apply. Refused when the config did not load (missing, invalid, or an unresolvable `blockPaths` entry): motus cannot enforce blocks it never read. Fix the config and run `/motus reload`.
-- `/motus reload`: re-read the config and load every source again, then replace the session's state with the result. Ends the degraded state if every required source that applies now loads; otherwise the status shows the new reason. Also ends a `continue`. Only you can run it.
+- `/motus reload`: re-read the config and load every source again, then replace the session's state with the result. Ends the degraded state if every required source that applies now loads; otherwise the status shows the new reason. Also ends a `continue`. Secrets from earlier loads stay redacted even if their source now fails. Only you can run it.
 - There is no `/motus off`. Read secret values in your own terminal.
 
 ## 1.0 stability

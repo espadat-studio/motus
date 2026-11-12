@@ -211,6 +211,9 @@ describe('/motus reload', () => {
     assert.match(notes.at(-1)?.message ?? '', /2 secrets from env \(1\), file \(1\)\nstatus: active$/)
     assert.equal(await emit('tool_call', { toolName: 'grep', input: {} }), undefined)
     assert.equal(await redacted(emit, `${LATE} ${TOKEN}`), '[REDACTED:LATE_TOKEN] [REDACTED:API_TOKEN]')
+    const bash = await emit('user_bash', { command: 'touch made', cwd: home, excludeFromContext: false })
+    assert.equal((bash as { result: { exitCode: number } }).result.exitCode, 0)
+    assert.ok(existsSync(join(home, 'made')))
     await motus('status')
     assert.match(notes.at(-1)?.message ?? '', /status: active$/)
   })
@@ -220,6 +223,7 @@ describe('/motus reload', () => {
     await writeFile(join(home, 'secrets.json'), 'not json')
     await motus('reload')
     assert.equal(notes.at(-1)?.type, 'error')
+    assert.match(notes.at(-1)?.message ?? '', /file \(stdout is not a JSON object of string values\)/)
     const { reason } = (await emit('tool_call', { toolName: 'grep', input: {} })) as { reason: string }
     assert.match(reason, /required source failed: file \(stdout is not a JSON object of string values\)/)
     assert.ok(!reason.includes('exited with code'))
@@ -234,6 +238,21 @@ describe('/motus reload', () => {
     assert.match(notes.at(-1)?.message ?? '', /status: active$/)
   })
 
+  test('waits for a slow session start so its result cannot overwrite the reload', async () => {
+    const slowUntilFile = {
+      sources: [{
+        type: 'command',
+        command: 'if [ -f secrets.json ]; then cat secrets.json; else touch started; sleep 0.3; exit 3; fi',
+      }],
+    }
+    const { emit, motus, home, started } = await setup(slowUntilFile, {}, true)
+    while (!existsSync(join(home, 'started'))) await new Promise((resolve) => setTimeout(resolve, 5))
+    await writeFile(join(home, 'secrets.json'), '{}')
+    await motus('reload')
+    await started
+    assert.equal(await emit('tool_call', { toolName: 'grep', input: {} }), undefined)
+  })
+
   test('in a session that is not degraded, refreshes the value set and reports counts', async () => {
     const { emit, motus, notes, home } = await setup(fromFile)
     await writeFile(join(home, 'secrets.json'), '{}')
@@ -243,6 +262,17 @@ describe('/motus reload', () => {
     await writeFile(join(home, 'secrets.json'), JSON.stringify({ LATE_TOKEN: LATE }))
     await motus('reload')
     assert.match(notes.at(-1)?.message ?? '', /2 secrets from env \(1\), file \(1\)/)
+    assert.equal(await redacted(emit, LATE), '[REDACTED:LATE_TOKEN]')
+  })
+
+  test('keeps redacting secrets from an earlier load when their source now fails', async () => {
+    const optional = { sources: [{ type: 'command', id: 'file', command: 'cat secrets.json', required: false }] }
+    const { emit, motus, notes, home } = await setup(optional)
+    await writeFile(join(home, 'secrets.json'), JSON.stringify({ LATE_TOKEN: LATE }))
+    await motus('reload')
+    await writeFile(join(home, 'secrets.json'), 'not json')
+    await motus('reload')
+    assert.match(notes.at(-1)?.message ?? '', /still redacting 1 secret from earlier loads/)
     assert.equal(await redacted(emit, LATE), '[REDACTED:LATE_TOKEN]')
   })
 })
