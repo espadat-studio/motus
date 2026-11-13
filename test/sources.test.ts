@@ -68,7 +68,7 @@ describe('envSource', () => {
     assert.deepEqual(await load('fixture-not-a-url-0001'), ['DATABASE_URL'])
   })
 
-  test('skips values whose entries are all existing paths and keeps secrets that contain slashes', async () => {
+  test('skips values whose entries are all home or existing paths and keeps secrets that contain slashes', async () => {
     const home = await mkdtemp(join(tmpdir(), 'motus-env-'))
     await mkdir(join(home, '.config', 'android'), { recursive: true })
     await mkdir(join(home, 'My Keys'))
@@ -78,11 +78,20 @@ describe('envSource', () => {
     assert.deepEqual(await load(join(home, '.config', 'android')), [])
     assert.deepEqual(await load('~/.config/android'), [])
     assert.deepEqual(await load(`${join(home, 'My Keys')}:~/josé`), [])
+    assert.deepEqual(await load(join(home, 'deleted', 'askpass')), [])
+    assert.deepEqual(await load('~/deleted/askpass'), [])
+    assert.deepEqual(await load(`${home}fixture-token-0001`), ['ADB_VENDOR_KEYS'])
     assert.deepEqual(await load('/abcDEF123xyz/QRS0987fixture'), ['ADB_VENDOR_KEYS'])
     assert.deepEqual(await load(`${home}:/fixture-token-0001`), ['ADB_VENDOR_KEYS'])
     assert.deepEqual(await load('https://user:fixture-pass-0001@host/x'), ['ADB_VENDOR_KEYS'])
     assert.deepEqual(await load('fixture/token/0001'), ['ADB_VENDOR_KEYS'])
     assert.deepEqual(await load('~fixture-token-0001'), ['ADB_VENDOR_KEYS'])
+    const rootHome = await envSource({ HOME: '/', ADB_VENDOR_KEYS: '/abcDEF123xyz/QRS0987fixture' }).load(ctx)
+    assert.deepEqual(rootHome.map(({ name }) => name), ['ADB_VENDOR_KEYS'])
+    const relativeHome = await envSource({ HOME: 'fixture', ADB_VENDOR_KEYS: 'fixture/token/0001' }).load(ctx)
+    assert.deepEqual(relativeHome.map(({ name }) => name), ['ADB_VENDOR_KEYS'])
+    const noHome = await envSource({ ADB_VENDOR_KEYS: '~/fixture-token-0001' }).load(ctx)
+    assert.deepEqual(noHome.map(({ name }) => name), ['ADB_VENDOR_KEYS'])
   })
 
   test('applies everywhere', async () => {
