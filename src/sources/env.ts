@@ -14,14 +14,15 @@ function isCredentialFreeUrl(value: string): boolean {
     && !/[;#]/.test(value)
 }
 
-function isExistingPath(entry: string, home: string | undefined): boolean {
-  if (entry.startsWith('/')) return existsSync(entry)
-  if (!home || !entry.startsWith('~/')) return false
-  return existsSync(join(home, entry.slice(2)))
+function isPath(entry: string, home: string | undefined): boolean {
+  if (entry.startsWith('~/')) return home !== undefined && home !== ''
+  const homePrefix = home ? join(home, '/') : '/'
+  if (homePrefix !== '/' && entry.startsWith(homePrefix)) return true
+  return entry.startsWith('/') && existsSync(entry)
 }
 
 function isPathList(value: string, home: string | undefined): boolean {
-  return value.split(':').every((entry) => isExistingPath(entry, home))
+  return value.split(':').every((entry) => isPath(entry, home))
 }
 
 function isSecret(name: string, value: string, home: string | undefined): boolean {
