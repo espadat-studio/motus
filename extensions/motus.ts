@@ -71,12 +71,12 @@ export function createMotus(
       const allowed = state.config?.degradedAllowTools ?? []
       if (state.degraded && !allowed.includes(event.toolName))
         return `session is degraded (${state.degraded}); every tool except [${allowed.join(', ')}] is blocked`
-      const placeholder = checkPlaceholders(
+      const placeholderReason = checkPlaceholders(
         JSON.stringify(event.input),
         state.loadedNames,
         state.config?.prefixes ?? DEFAULT_PREFIXES,
       )
-      if (placeholder) return placeholder
+      if (placeholderReason) return placeholderReason
       if (isToolCallEventType('bash', event)) return checkShellCommand(event.input.command)
       if (isToolCallEventType('grep', event)) {
         const reason = checkSearchRoot(event.input.path, cwd, state.blockPaths, home)

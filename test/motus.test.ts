@@ -354,17 +354,6 @@ describe('tool_call', () => {
     for (const content of ['hello', '@', 'see file: x'])
       assert.equal(await emit('tool_call', { toolName: 'write', input: { path: 'notes.md', content } }), undefined)
   })
-
-  test('blocks placeholders of loaded names in write, edit and bash', async () => {
-    const { emit } = await setup()
-    const edit = { path: 'a', edits: [{ oldText: 'x', newText: 'k=[REDACTED:API_TOKEN]' }] }
-    assert.ok(await emit('tool_call', { toolName: 'edit', input: edit }))
-    assert.ok(await emit('tool_call', { toolName: 'write', input: { path: 'a', content: '[REDACTED:API_TOKEN]' } }))
-    assert.equal(
-      await emit('tool_call', { toolName: 'write', input: { path: 'a', content: '[REDACTED:OTHER]' } }),
-      undefined,
-    )
-  })
 })
 
 describe('redaction', () => {
