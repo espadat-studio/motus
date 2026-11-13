@@ -267,20 +267,24 @@ describe('tool_call', () => {
     assert.equal(await emit('tool_call', write), undefined)
   })
 
-  test('blocks prefix and loaded-name placeholders in write, edit and bash', async () => {
+  test('blocks prefix and loaded-name placeholders in every tool', async () => {
     const { emit } = await setup(config)
+    const callsWith = (text: string) => [
+      { toolName: 'write', input: { path: 'a.md', content: text } },
+      { toolName: 'edit', input: { path: 'a.md', edits: [{ oldText: 'x', newText: text }] } },
+      { toolName: 'bash', input: { command: `echo '${text}' > a.md` } },
+      { toolName: 'read', input: { path: `${text}code/x` } },
+      { toolName: 'subagent', input: { task: 'go', cwd: text } },
+    ]
     for (const name of ['ghp_', 'xoxb-', 'API_TOKEN']) {
-      const text = `x [REDACTED:${name}]`
-      for (
-        const call of [
-          { toolName: 'write', input: { path: 'a.md', content: text } },
-          { toolName: 'edit', input: { path: 'a.md', edits: [{ oldText: 'x', newText: text }] } },
-          { toolName: 'bash', input: { command: `echo '${text}' > a.md` } },
-        ]
-      ) { assert.ok(await emit('tool_call', call), `${call.toolName} ${name}`) }
+      for (const call of callsWith(`x [REDACTED:${name}]`)) {
+        const { reason } = (await emit('tool_call', call)) as { reason: string }
+        assert.ok(reason.includes(`[REDACTED:${name}]`), `${call.toolName} ${name}`)
+        assert.doesNotMatch(reason, /writ/, reason)
+      }
     }
-    const other = { toolName: 'write', input: { path: 'a.md', content: '[REDACTED:OTHER]' } }
-    assert.equal(await emit('tool_call', other), undefined)
+    for (const call of callsWith('[REDACTED:OTHER]'))
+      assert.equal(await emit('tool_call', call), undefined, call.toolName)
   })
 
   test('blocks commands after a line continuation', async () => {
