@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 
 import type { Secret, SecretSource } from '../sources.ts'
 
@@ -14,15 +14,15 @@ function isCredentialFreeUrl(value: string): boolean {
     && !/[;#]/.test(value)
 }
 
-function isPath(entry: string, home: string | undefined): boolean {
-  if (entry.startsWith('~/')) return home !== undefined && home !== ''
-  const homePrefix = home ? join(home, '/') : '/'
-  if (homePrefix !== '/' && entry.startsWith(homePrefix)) return true
+function isSkippedPath(entry: string, home: string | undefined): boolean {
+  const hasHome = home !== undefined && isAbsolute(home)
+  if (hasHome && entry.startsWith('~/')) return true
+  if (hasHome && home !== '/' && entry.startsWith(join(home, '/'))) return true
   return entry.startsWith('/') && existsSync(entry)
 }
 
 function isPathList(value: string, home: string | undefined): boolean {
-  return value.split(':').every((entry) => isPath(entry, home))
+  return value.split(':').every((entry) => isSkippedPath(entry, home))
 }
 
 function isSecret(name: string, value: string, home: string | undefined): boolean {

@@ -88,6 +88,10 @@ describe('envSource', () => {
     assert.deepEqual(await load('~fixture-token-0001'), ['ADB_VENDOR_KEYS'])
     const rootHome = await envSource({ HOME: '/', ADB_VENDOR_KEYS: '/abcDEF123xyz/QRS0987fixture' }).load(ctx)
     assert.deepEqual(rootHome.map(({ name }) => name), ['ADB_VENDOR_KEYS'])
+    const relativeHome = await envSource({ HOME: 'fixture', ADB_VENDOR_KEYS: 'fixture/token/0001' }).load(ctx)
+    assert.deepEqual(relativeHome.map(({ name }) => name), ['ADB_VENDOR_KEYS'])
+    const noHome = await envSource({ ADB_VENDOR_KEYS: '~/fixture-token-0001' }).load(ctx)
+    assert.deepEqual(noHome.map(({ name }) => name), ['ADB_VENDOR_KEYS'])
   })
 
   test('applies everywhere', async () => {
