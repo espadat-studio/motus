@@ -26,7 +26,6 @@ import { describeLoad, loadFromConfig, type Secret } from '../src/sources.ts'
 const REDACTION_FAILED = '[motus: redaction failed, output withheld]'
 const COMMAND_FAILED = '[motus: command failed or its output could not be redacted, output withheld]'
 const HELD_VALUE_REFUSAL = 'motus: refused: the command holds a loaded secret value. Reference it by variable name'
-const PLACEHOLDER_TOOLS = new Set(['write', 'edit', 'bash'])
 const MAX_PATH_LENGTH = 4096
 
 interface State {
@@ -75,14 +74,12 @@ export function createMotus(
       const allowed = state.config?.degradedAllowTools ?? []
       if (state.degraded && !allowed.includes(event.toolName))
         return `session is degraded (${state.degraded}); every tool except [${allowed.join(', ')}] is blocked`
-      if (PLACEHOLDER_TOOLS.has(event.toolName)) {
-        const reason = checkPlaceholders(
-          JSON.stringify(event.input),
-          state.loadedNames,
-          state.config?.prefixes ?? DEFAULT_PREFIXES,
-        )
-        if (reason) return reason
-      }
+      const placeholderReason = checkPlaceholders(
+        JSON.stringify(event.input),
+        state.loadedNames,
+        state.config?.prefixes ?? DEFAULT_PREFIXES,
+      )
+      if (placeholderReason) return placeholderReason
       if (isToolCallEventType('bash', event)) return checkShellCommand(event.input.command)
       if (isToolCallEventType('grep', event)) {
         const reason = checkSearchRoot(event.input.path, cwd, state.blockPaths, home)

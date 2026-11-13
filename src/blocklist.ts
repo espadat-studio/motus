@@ -123,13 +123,13 @@ export function checkPlaceholders(
   for (const name of loadedNames) {
     const placeholder = `[REDACTED:${name}]`
     if (input.includes(JSON.stringify(placeholder).slice(1, -1)))
-      return `${placeholder} stands in for a loaded secret; writing it would replace the real value`
+      return `${placeholder} stands in for a loaded secret; it is not the real value`
   }
   if (prefixes.length === 0) return undefined
   const prefixName = new RegExp(`^(?:${prefixes.join('|')})$`)
   for (const [placeholder, name] of input.matchAll(PLACEHOLDER)) {
     if (name !== undefined && prefixName.test(name))
-      return `${placeholder} stands in for a token matching a configured prefix; writing it would replace the real value`
+      return `${placeholder} stands in for a token matching a vendor prefix; it is not the real value`
   }
   return undefined
 }
