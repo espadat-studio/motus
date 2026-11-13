@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.1](https://github.com/espadat-studio/motus/compare/v1.4.0...v1.4.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* **env:** skip stale path-valued env vars under home ([#105](https://github.com/espadat-studio/motus/issues/105)) ([138aec8](https://github.com/espadat-studio/motus/commit/138aec851ab8f75f0e594fe1d53cec3301e4976c))
+* **pi:** block placeholders in every tool call ([#104](https://github.com/espadat-studio/motus/issues/104)) ([771873f](https://github.com/espadat-studio/motus/commit/771873f63455686f3852191d6b22356e7b3059d6))
+
 ## [1.4.0](https://github.com/espadat-studio/motus/compare/v1.3.3...v1.4.0) (2026-11-12)
 
 
